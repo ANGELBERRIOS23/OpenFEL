@@ -25,29 +25,17 @@ export default function Query() {
   useEffect(() => {
     let result = items;
     if (filterNit) {
-      result = result.filter(i => {
-        const nit = i.nitReceptor || i.NITReceptor || i.nitEmisor || i.NITEmisor || '';
-        return nit.includes(filterNit);
-      });
+      result = result.filter(i => (i.nitReceptor || i.nitEmisor || '').includes(filterNit));
     }
     if (filterName) {
       const q = filterName.toLowerCase();
-      result = result.filter(i => {
-        const name = (i.receptor || i.NombreReceptor || i.nombreReceptor || i.emisor || i.NombreEmisor || i.nombreEmisor || '').toLowerCase();
-        return name.includes(q);
-      });
+      result = result.filter(i => (i.nombreReceptor || i.nombreEmisor || '').toLowerCase().includes(q));
     }
     if (filterFrom) {
-      result = result.filter(i => {
-        const d = i.fecha || i.FechaEmision || i.fechaEmision || '';
-        return d >= filterFrom;
-      });
+      result = result.filter(i => (i.fecha || '') >= filterFrom);
     }
     if (filterTo) {
-      result = result.filter(i => {
-        const d = i.fecha || i.FechaEmision || i.fechaEmision || '';
-        return d <= filterTo + 'T23:59:59';
-      });
+      result = result.filter(i => (i.fecha || '') <= filterTo + 'T23:59:59');
     }
     setFiltered(result);
   }, [items, filterNit, filterName, filterFrom, filterTo]);
@@ -94,10 +82,11 @@ export default function Query() {
     }
   }
 
-  function getUuid(item: any) { return item.uuid || item.UUID || item.numeroAutorizacion || ''; }
-  function getEstado(item: any) { return item.estado || item.Estado || item.estadoDte || ''; }
-  function isAnulado(estado: string) { return estado === 'A' || estado === 'Anulado'; }
-  function getNitReceptor(item: any) { return item.nitReceptor || item.NITReceptor || item.nitEmisor || item.NITEmisor || 'CF'; }
+  function getFecha(item: any) {
+    const raw = item.fecha || '';
+    if (typeof raw === 'string' && raw.includes('T')) return raw.split('T')[0] + ' ' + (item.hora || raw.split('T')[1]?.slice(0,5) || '');
+    return raw;
+  }
 
   return (
     <div>
@@ -175,24 +164,20 @@ export default function Query() {
             </thead>
             <tbody>
               {filtered.map((item: any, i: number) => {
-                const uuid = getUuid(item);
-                const estado = getEstado(item);
-                const anulado = isAnulado(estado);
-                const nitR = getNitReceptor(item);
+                const uuid = item.uuid || '';
+                const nitR = item.nitReceptor || 'CF';
                 return (
                   <tr key={i} className={`border-b ${t.borderSub} last:border-0`}>
                     <td className={`px-4 py-3 font-mono text-xs ${t.text}`} title={uuid}>{uuid.slice(0, 8)}...</td>
-                    <td className={`px-4 py-3 ${t.textH}`}>{item.tipo || item.Tipo || item.tipoDocumento || '—'}</td>
-                    <td className={`px-4 py-3 ${t.textMuted}`}>{item.fecha || item.FechaEmision || item.fechaEmision || '—'}</td>
+                    <td className={`px-4 py-3 ${t.textH}`}>{item.tipo || '—'}</td>
+                    <td className={`px-4 py-3 ${t.textMuted}`}>{getFecha(item) || '—'}</td>
                     <td className={`px-4 py-3 ${t.text}`}>
-                      {tab === 'emitted'
-                        ? (item.receptor || item.NombreReceptor || item.nombreReceptor || '—')
-                        : (item.emisor || item.NombreEmisor || item.nombreEmisor || '—')}
+                      {tab === 'emitted' ? (item.nombreReceptor || '—') : (item.nombreEmisor || '—')}
                     </td>
-                    <td className={`px-4 py-3 ${t.textH}`}>Q{item.total || item.MontoTotal || item.montoTotal || '—'}</td>
+                    <td className={`px-4 py-3 ${t.textH}`}>Q{item.total || '0'}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs ${anulado ? t.badgeRed : t.badgeGreen}`}>
-                        {anulado ? 'Anulado' : 'Vigente'}
+                      <span className={`px-2 py-0.5 rounded text-xs ${item.anulado ? t.badgeRed : t.badgeGreen}`}>
+                        {item.anulado ? 'Anulado' : 'Vigente'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -209,7 +194,7 @@ export default function Query() {
                         <button onClick={() => downloadFile(uuid, 'xml', nitR)} disabled={downloading === `${uuid}-xml`} className={`p-1 rounded ${t.textMuted} hover:text-accent cursor-pointer disabled:opacity-50`} title="XML">
                           <FileCode size={14} />
                         </button>
-                        {!anulado && tab === 'emitted' && (
+                        {!item.anulado && tab === 'emitted' && (
                           <button onClick={() => annul(uuid, nitR)} className={`p-1 rounded ${t.textMuted} hover:text-red-400 cursor-pointer`} title="Anular">
                             <XCircle size={14} />
                           </button>
@@ -230,26 +215,24 @@ export default function Query() {
       {/* Mobile cards */}
       <div className={`sm:hidden rounded-xl border ${t.card} divide-y ${t.borderSub}`}>
         {filtered.map((item: any, i: number) => {
-          const uuid = getUuid(item);
-          const estado = getEstado(item);
-          const anulado = isAnulado(estado);
-          const nitR = getNitReceptor(item);
+          const uuid = item.uuid || '';
+          const nitR = item.nitReceptor || 'CF';
           return (
             <div key={i} className="p-4 space-y-2">
               <div className="flex justify-between items-start">
                 <span className={`font-mono text-xs ${t.text}`} title={uuid}>{uuid.slice(0, 12)}...</span>
-                <span className={`px-2 py-0.5 rounded text-xs ${anulado ? t.badgeRed : t.badgeGreen}`}>
-                  {anulado ? 'Anulado' : 'Vigente'}
+                <span className={`px-2 py-0.5 rounded text-xs ${item.anulado ? t.badgeRed : t.badgeGreen}`}>
+                  {item.anulado ? 'Anulado' : 'Vigente'}
                 </span>
               </div>
-              <div className={`text-sm ${t.textH}`}>{item.tipo || item.Tipo || '—'} · Q{item.total || item.MontoTotal || '—'}</div>
-              <div className={`text-xs ${t.textMuted}`}>{item.fecha || item.FechaEmision || '—'}</div>
+              <div className={`text-sm ${t.textH}`}>{item.tipo || '—'} · Q{item.total || '0'}</div>
+              <div className={`text-xs ${t.textMuted}`}>{getFecha(item) || '—'}</div>
               <div className="flex gap-3 pt-1 flex-wrap">
                 <button onClick={() => downloadFile(uuid, 'pdf', nitR)} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileText size={12} /> PDF</button>
                 <button onClick={() => downloadFile(uuid, 'custom-pdf', nitR)} className="flex items-center gap-1 text-xs text-purple-400 cursor-pointer"><Palette size={12} /> Custom</button>
                 <button onClick={() => downloadFile(uuid, 'pos', nitR)} className="flex items-center gap-1 text-xs text-amber-400 cursor-pointer"><Printer size={12} /> POS</button>
                 <button onClick={() => downloadFile(uuid, 'xml', nitR)} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileCode size={12} /> XML</button>
-                {!anulado && tab === 'emitted' && <button onClick={() => annul(uuid, nitR)} className="text-xs text-red-400 cursor-pointer">Anular</button>}
+                {!item.anulado && tab === 'emitted' && <button onClick={() => annul(uuid, nitR)} className="text-xs text-red-400 cursor-pointer">Anular</button>}
               </div>
             </div>
           );

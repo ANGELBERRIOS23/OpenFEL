@@ -20,6 +20,29 @@ def _extract_items(result) -> list:
     return []
 
 
+def _normalize_item(item: dict) -> dict:
+    """Normalize SAT mobile/web API item fields to consistent names."""
+    total_raw = item.get("granTotal") or item.get("total") or item.get("MontoTotal") or "0"
+    if isinstance(total_raw, str):
+        total_raw = total_raw.replace("GTQ", "").replace("USD", "").strip()
+    return {
+        "uuid": item.get("numeroUUID") or item.get("uuid") or item.get("UUID") or item.get("numeroAutorizacion") or "",
+        "tipo": item.get("tipo") or item.get("Tipo") or item.get("tipoDocumento") or "",
+        "fecha": item.get("fechaEmision") or item.get("FechaEmision") or item.get("fecha") or "",
+        "hora": item.get("hora") or "",
+        "nombreReceptor": item.get("nombreReceptor") or item.get("NombreReceptor") or item.get("receptor") or "",
+        "nombreEmisor": item.get("nombreEmisor") or item.get("NombreEmisor") or item.get("emisor") or "",
+        "nitReceptor": item.get("nitReceptor") or item.get("NITReceptor") or "CF",
+        "nitEmisor": item.get("nitEmisor") or item.get("NITEmisor") or "",
+        "total": total_raw,
+        "estado": item.get("estado") or item.get("Estado") or item.get("estadoDte") or "",
+        "anulado": item.get("anulada") is True or item.get("estado") in ("A", "Anulado"),
+        "serie": item.get("serie") or item.get("Serie") or "",
+        "numeroDocumento": item.get("numeroDocumento") or item.get("NumeroDocumento") or "",
+        "exportacion": item.get("exportacion", False),
+    }
+
+
 async def consultar_nit(db: AsyncSession, account_nit: str, nit_consulta: str) -> dict:
     client = await session_manager.get_client(db, account_nit)
     start = time.time()
@@ -75,7 +98,7 @@ async def listar_emitidos(db: AsyncSession, account_nit: str) -> dict:
     start = time.time()
     raw = await asyncio.to_thread(client.listar_emitidos)
     duration = int((time.time() - start) * 1000)
-    items = _extract_items(raw)
+    items = [_normalize_item(i) for i in _extract_items(raw)]
     return {"total": len(items), "items": items, "source": "mobile", "duration_ms": duration}
 
 
@@ -84,7 +107,7 @@ async def listar_recibidos(db: AsyncSession, account_nit: str) -> dict:
     start = time.time()
     raw = await asyncio.to_thread(client.listar_recibidos)
     duration = int((time.time() - start) * 1000)
-    items = _extract_items(raw)
+    items = [_normalize_item(i) for i in _extract_items(raw)]
     return {"total": len(items), "items": items, "source": "mobile", "duration_ms": duration}
 
 
