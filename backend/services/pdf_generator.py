@@ -141,12 +141,15 @@ def fmt_datetime(fecha_iso):
 
 def date_parts(fecha_iso):
     if not fecha_iso:
-        return ["", "", ""]
-    if '/' in fecha_iso[:10]:
-        p = fecha_iso[:10].split('/')
-        return [p[2], p[1], p[0]] if len(p) == 3 else ["", "", ""]
-    p = fecha_iso[:10].split('-')
-    return int(p[2]), int(p[1]), int(p[0])
+        return 0, 0, 0
+    try:
+        if '/' in fecha_iso[:10]:
+            p = fecha_iso[:10].split('/')
+            return int(p[0]), int(p[1]), int(p[2])
+        p = fecha_iso[:10].split('-')
+        return int(p[2]), int(p[1]), int(p[0])
+    except (ValueError, IndexError):
+        return 0, 0, 0
 
 
 def _safe(val, default=""):
@@ -342,11 +345,11 @@ class FacturaPDF(FPDF):
         em = d['emisor']
         cert = d['certificacion']
         Y0 = 12
-        logo_w = 40
-        info_x = self.LEFT + logo_w + 3
-        info_w = 80
-        box_x = self.LEFT + self.PAGE_W - 66
-        box_w = 66
+        logo_w = 30 if self.logo_path else 0
+        info_x = self.LEFT + logo_w + (3 if logo_w else 0)
+        box_w = 68
+        box_x = self.LEFT + self.PAGE_W - box_w
+        info_w = box_x - info_x - 2
 
         if self.logo_path:
             self.image(self.logo_path, x=self.LEFT, y=Y0, w=logo_w)
@@ -356,57 +359,67 @@ class FacturaPDF(FPDF):
             nombre_comercial = nombre_comercial.split(' - ', 1)[1]
 
         self.set_xy(info_x, Y0)
-        self.set_font('Helvetica', 'B', 10)
+        self.set_font('Helvetica', 'B', 9)
         self.tc(self.C_DARK)
         self.cell(info_w, 5, nombre_comercial or em.get('nombre', ''), align='C')
 
+        dir_full = em.get('direccion', '')
+        muni = em.get('municipio', '')
+        depto = em.get('departamento', '')
+        if muni and muni not in dir_full:
+            dir_full += f", {muni}"
+        if depto and depto not in dir_full:
+            dir_full += f", {depto}"
+
         self.set_xy(info_x, Y0 + 5)
+        self.set_font('Helvetica', '', 6.5)
+        self.multi_cell(info_w, 3.5, dir_full, align='C')
+
+        contact_y = self.get_y()
+        self.set_xy(info_x, contact_y)
         self.set_font('Helvetica', '', 7)
-        self.cell(info_w, 4, em.get('nombre', ''), align='C')
-
-        dir_full = f"{em.get('direccion','')}, {em.get('municipio','')}, {em.get('departamento','')}"
-        self.set_xy(info_x, Y0 + 9)
-        self.cell(info_w, 4, dir_full, align='C')
-
-        self.set_xy(info_x, Y0 + 13)
         self.cell(info_w, 4, f"NIT: {format_nit(em['nit'])}", align='C')
+        contact_y += 4
 
-        self.set_xy(info_x, Y0 + 17)
         if self.empresa_tel:
+            self.set_xy(info_x, contact_y)
             self.cell(info_w, 4, f"Tel: {self.empresa_tel}", align='C')
+            contact_y += 4
 
-        row_y = Y0 + 21
         self.tc(self.C_LINK)
         if self.empresa_email:
-            self.set_xy(info_x, row_y)
-            self.cell(info_w, 4, self.empresa_email, align='C')
-            row_y += 4
+            self.set_xy(info_x, contact_y)
+            self.set_font('Helvetica', '', 6.5)
+            self.cell(info_w, 3.5, self.empresa_email, align='C')
+            contact_y += 3.5
         if self.empresa_web:
-            self.set_xy(info_x, row_y)
-            self.cell(info_w, 4, self.empresa_web, align='C')
+            self.set_xy(info_x, contact_y)
+            self.cell(info_w, 3.5, self.empresa_web, align='C')
         self.tc(self.C_DARK)
 
         tipo_nombre = TIPO_DTE_NAMES.get(d['tipo'], d['tipo'])
+        tipo_label = f"{tipo_nombre} Electronica"
         afil_nombre = AFILIACION_NAMES.get(em.get('afiliacion', 'GEN'), em.get('afiliacion', ''))
 
         self.set_xy(box_x, Y0)
-        self.set_font('Helvetica', 'B', 7.5)
+        self.set_font('Helvetica', 'B', 7)
         self.tc(self.C_DARK)
         self.cell(box_w, 5, "DOCUMENTO TRIBUTARIO ELECTRONICO", align='C')
 
         self.set_xy(box_x, Y0 + 5)
         self.fc(self.C_DARK); self.tc(self.C_ON_DARK)
-        self.set_font('Helvetica', 'B', 9)
-        self.cell(box_w, 7, f"{tipo_nombre} Electronica", fill=True, align='C')
+        font_size = 8 if len(tipo_label) > 30 else 9
+        self.set_font('Helvetica', 'B', font_size)
+        self.cell(box_w, 7, tipo_label, fill=True, align='C')
 
         self.set_xy(box_x, Y0 + 12)
         self.fc(self.C_MID); self.tc(self.C_ON_MID)
-        self.set_font('Helvetica', '', 8)
+        self.set_font('Helvetica', '', 7.5)
         self.cell(box_w, 5, afil_nombre, fill=True, align='C')
 
         self.set_xy(box_x, Y0 + 17)
         self.fc(self.C_LIGHT); self.tc(self.C_DARK)
-        self.set_font('Helvetica', 'B', 8)
+        self.set_font('Helvetica', 'B', 7.5)
         self.cell(box_w, 4.5, f"Serie: {cert.get('serie','')}", fill=True, align='C')
 
         self.set_xy(box_x, Y0 + 21.5)
@@ -672,14 +685,18 @@ class FacturaPDF(FPDF):
 
 class ReciboPOS(FPDF):
     def __init__(self, data, width_mm: int = 80):
-        page_w = width_mm
-        super().__init__('P', 'mm', (page_w, 297))
-        self.data = data
-        self.page_w = page_w
+        self.page_w = width_mm
         self.margin = 3
-        self.usable = page_w - 2 * self.margin
+        self.usable = width_mm - 2 * self.margin
+        self.data = data
+        self._content_height = self._estimate_height(data)
+        super().__init__('P', 'mm', (width_mm, self._content_height))
         self.set_margins(self.margin, self.margin, self.margin)
         self.set_auto_page_break(auto=False)
+
+    def _estimate_height(self, d):
+        n_items = len(d.get('items', []))
+        return max(120, 90 + n_items * 4 + 45)
 
     def build(self):
         self.add_page()
@@ -689,34 +706,35 @@ class ReciboPOS(FPDF):
         cert = d['certificacion']
         y = self.margin
 
-        self.set_font('Helvetica', 'B', 10)
+        self.set_font('Helvetica', 'B', 9)
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 5, em.get('nombre_comercial', em.get('nombre', '')), align='C')
-        y += 5
+        nombre = em.get('nombre_comercial', em.get('nombre', ''))
+        self.multi_cell(self.usable, 4, nombre, align='C')
+        y = self.get_y()
 
-        self.set_font('Helvetica', '', 7)
+        self.set_font('Helvetica', '', 6.5)
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 3.5, em.get('nombre', ''), align='C')
-        y += 3.5
+        self.cell(self.usable, 3, f"NIT: {format_nit(em['nit'])}", align='C')
+        y += 3
 
+        dir_full = em.get('direccion', '')
+        muni = em.get('municipio', '')
+        if muni and muni not in dir_full:
+            dir_full += f", {muni}"
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 3.5, f"NIT: {format_nit(em['nit'])}", align='C')
-        y += 3.5
-
-        dir_full = f"{em.get('direccion','')}, {em.get('municipio','')}"
-        self.set_xy(self.margin, y)
-        self.cell(self.usable, 3.5, dir_full, align='C')
-        y += 5
+        self.set_font('Helvetica', '', 5.5)
+        self.multi_cell(self.usable, 3, dir_full, align='C')
+        y = self.get_y() + 1
 
         y = self._dashed_line(y)
 
         tipo_nombre = TIPO_DTE_NAMES.get(d['tipo'], d['tipo'])
-        self.set_font('Helvetica', 'B', 9)
+        self.set_font('Helvetica', 'B', 8)
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 5, f"{tipo_nombre} Electronica", align='C')
-        y += 5
+        self.multi_cell(self.usable, 4, f"{tipo_nombre} Electronica", align='C')
+        y = self.get_y()
 
-        self.set_font('Helvetica', '', 7)
+        self.set_font('Helvetica', '', 6.5)
         self.set_xy(self.margin, y)
         self.cell(self.usable, 3.5, f"Serie: {cert.get('serie','')}  No: {cert.get('numero','')}", align='C')
         y += 3.5
@@ -724,69 +742,70 @@ class ReciboPOS(FPDF):
         self.set_xy(self.margin, y)
         fecha_str = fmt_datetime(d['fecha_emision']) if d.get('fecha_emision') else ''
         self.cell(self.usable, 3.5, f"Fecha: {fecha_str}", align='C')
-        y += 5
+        y += 4
 
         y = self._dashed_line(y)
 
-        self.set_font('Helvetica', '', 7)
+        self.set_font('Helvetica', '', 6.5)
         self.set_xy(self.margin, y)
         self.cell(self.usable, 3.5, f"NIT: {format_nit(rec['nit'])}  {rec.get('nombre','CF')}")
-        y += 5
+        y += 4
 
         y = self._dashed_line(y)
 
-        col_desc = self.usable - 30
-        col_qty = 10
-        col_total = 20
+        col_qty = 8
+        col_total = 18
+        col_desc = self.usable - col_qty - col_total
 
-        self.set_font('Helvetica', 'B', 7)
+        self.set_font('Helvetica', 'B', 6.5)
         self.set_xy(self.margin, y)
         self.cell(col_qty, 3.5, "Cant")
         self.cell(col_desc, 3.5, "Descripcion")
         self.cell(col_total, 3.5, "Total", align='R')
         y += 4
 
-        self.set_font('Helvetica', '', 7)
+        self.set_font('Helvetica', '', 6.5)
         for item in d['items']:
             self.set_xy(self.margin, y)
             self.cell(col_qty, 3.5, str(int(item['cantidad'])))
+            max_desc = int(col_desc / 1.5)
             desc = item['descripcion']
-            if len(desc) > 30:
-                desc = desc[:28] + ".."
+            if len(desc) > max_desc:
+                desc = desc[:max_desc - 2] + ".."
             self.cell(col_desc, 3.5, desc)
             self.cell(col_total, 3.5, f"Q{item['total']:.2f}", align='R')
             y += 3.5
 
-        y += 2
+        y += 1
         y = self._dashed_line(y)
 
         self.set_font('Helvetica', 'B', 9)
         self.set_xy(self.margin, y)
         self.cell(self.usable - 25, 5, "TOTAL:")
         self.cell(25, 5, f"Q{d['gran_total']:,.2f}", align='R')
-        y += 6
+        y += 5
 
-        self.set_font('Helvetica', '', 6)
+        self.set_font('Helvetica', '', 5.5)
         letras = numero_a_letras(d['gran_total'])
         self.set_xy(self.margin, y)
-        self.multi_cell(self.usable, 3, letras)
-        y = self.get_y() + 2
+        self.multi_cell(self.usable, 2.5, letras)
+        y = self.get_y() + 1
 
         y = self._dashed_line(y)
 
-        self.set_font('Helvetica', '', 5.5)
+        self.set_font('Helvetica', '', 5)
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 3, f"UUID: {cert.get('uuid','')}", align='C')
-        y += 3
+        self.cell(self.usable, 2.5, f"UUID: {cert.get('uuid','')}", align='C')
+        y += 2.5
 
         self.set_xy(self.margin, y)
         fecha_cert = fmt_datetime(cert['fecha']) if cert.get('fecha') else ''
-        self.cell(self.usable, 3, f"Cert: {fecha_cert}", align='C')
-        y += 3
+        self.cell(self.usable, 2.5, f"Cert: {fecha_cert}", align='C')
+        y += 2.5
 
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 3, f"Certificador: {cert.get('nombre_cert','')}", align='C')
-        y += 5
+        self.cell(self.usable, 2.5, f"Certificador: {cert.get('nombre_cert','')}", align='C')
+        y += 4
 
         qr_url = (
             f"https://felpub.c.sat.gob.gt/verificador-web/publico/vistas/verificacionDte.jsf"
@@ -797,20 +816,17 @@ class ReciboPOS(FPDF):
         qr_path = os.path.join(tempfile.gettempdir(), f"qr_pos_{cert.get('serie','tmp')}.png")
         qr_img.save(qr_path)
 
-        qr_size = min(self.usable * 0.6, 35)
+        qr_size = min(self.usable * 0.5, 30)
         qr_x = self.margin + (self.usable - qr_size) / 2
         self.image(qr_path, x=qr_x, y=y, w=qr_size)
-        y += qr_size + 3
+        y += qr_size + 2
 
-        self.set_font('Helvetica', '', 5)
+        self.set_font('Helvetica', '', 4.5)
         self.set_xy(self.margin, y)
-        self.cell(self.usable, 3, "Emitido y autorizado por SAT", align='C')
-        y += 4
+        self.cell(self.usable, 2.5, "Emitido y autorizado por SAT", align='C')
 
         if os.path.exists(qr_path):
             os.remove(qr_path)
-
-        pass
 
     def _dashed_line(self, y):
         x = self.margin
