@@ -1,0 +1,13 @@
+services:
+  openfel:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - openfel-data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  openfel-data:
