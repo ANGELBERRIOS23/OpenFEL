@@ -69,10 +69,10 @@ export default function Query() {
     }
   }
 
-  async function annul(uuid: string) {
+  async function annul(uuid: string, nitReceptor: string = 'CF') {
     if (!confirm(`¿Anular DTE ${uuid}?`)) return;
     try {
-      const res = await api.dte.annul({ account_nit: accountNit, uuid });
+      const res = await api.dte.annul({ account_nit: accountNit, uuid, nit_receptor: nitReceptor });
       setAnnulResult(`${uuid}: ${res.estado}`);
       search();
     } catch (err: any) {
@@ -210,7 +210,7 @@ export default function Query() {
                           <FileCode size={14} />
                         </button>
                         {!anulado && tab === 'emitted' && (
-                          <button onClick={() => annul(uuid)} className={`p-1 rounded ${t.textMuted} hover:text-red-400 cursor-pointer`} title="Anular">
+                          <button onClick={() => annul(uuid, nitR)} className={`p-1 rounded ${t.textMuted} hover:text-red-400 cursor-pointer`} title="Anular">
                             <XCircle size={14} />
                           </button>
                         )}
@@ -249,7 +249,7 @@ export default function Query() {
                 <button onClick={() => downloadFile(uuid, 'custom-pdf', nitR)} className="flex items-center gap-1 text-xs text-purple-400 cursor-pointer"><Palette size={12} /> Custom</button>
                 <button onClick={() => downloadFile(uuid, 'pos', nitR)} className="flex items-center gap-1 text-xs text-amber-400 cursor-pointer"><Printer size={12} /> POS</button>
                 <button onClick={() => downloadFile(uuid, 'xml', nitR)} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileCode size={12} /> XML</button>
-                {!anulado && tab === 'emitted' && <button onClick={() => annul(uuid)} className="text-xs text-red-400 cursor-pointer">Anular</button>}
+                {!anulado && tab === 'emitted' && <button onClick={() => annul(uuid, nitR)} className="text-xs text-red-400 cursor-pointer">Anular</button>}
               </div>
             </div>
           );

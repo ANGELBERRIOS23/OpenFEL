@@ -29,6 +29,7 @@ class DteAnnul(BaseModel):
     account_nit: str
     uuid: str
     motivo: str = "Anulación"
+    nit_receptor: str = "CF"
 
 
 class DteQuery(BaseModel):

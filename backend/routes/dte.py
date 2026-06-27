@@ -73,7 +73,7 @@ async def annul_dte(
 ):
     check_account_access(key, body.account_nit)
     try:
-        result = await dte_service.anular_dte(db, body.account_nit, body.uuid, body.motivo)
+        result = await dte_service.anular_dte(db, body.account_nit, body.uuid, body.motivo, body.nit_receptor)
         return DteAnnulResponse(
             uuid=body.uuid,
             estado=result.get("resultado", ""),

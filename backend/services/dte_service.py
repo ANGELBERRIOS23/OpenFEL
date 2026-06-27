@@ -60,10 +60,10 @@ async def emitir_dte(
     return result
 
 
-async def anular_dte(db: AsyncSession, account_nit: str, uuid: str, motivo: str = "Anulación") -> dict:
+async def anular_dte(db: AsyncSession, account_nit: str, uuid: str, motivo: str = "Anulación", nit_receptor: str = "CF") -> dict:
     client = await session_manager.get_client(db, account_nit)
     start = time.time()
-    result = await asyncio.to_thread(client.anular, uuid, motivo=motivo)
+    result = await asyncio.to_thread(client.anular, uuid, nit_receptor=nit_receptor, motivo=motivo)
     duration = int((time.time() - start) * 1000)
     if isinstance(result, dict):
         result["duration_ms"] = duration
