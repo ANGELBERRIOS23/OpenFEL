@@ -9,13 +9,25 @@
   --color-success: #22c55e;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
+
+  --color-bg-primary-light: #f8fafc;
+  --color-bg-secondary-light: #ffffff;
+  --color-bg-card-light: #ffffff;
 }
 
 body {
   margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body.dark {
   background: var(--color-bg-primary);
   color: #e2e8f0;
-  font-family: system-ui, -apple-system, sans-serif;
+}
+
+body.light {
+  background: var(--color-bg-primary-light);
+  color: #1e293b;
 }
 
 #root {

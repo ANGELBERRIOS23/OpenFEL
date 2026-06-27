@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.crypto import encrypt_credential, decrypt_credential
@@ -13,7 +13,7 @@ async def create_account(
     nit: str,
     login_password: str,
     cert_password: str,
-    preferred_api: str = "mobile",
+    preferred_api: str = "mixed",
     name: str = "",
     affiliation: str = "GEN",
 ) -> Account:
@@ -64,6 +64,8 @@ async def update_account(
     login_password: Optional[str] = None,
     cert_password: Optional[str] = None,
     preferred_api: Optional[str] = None,
+    affiliation: Optional[str] = None,
+    name: Optional[str] = None,
     status: Optional[str] = None,
 ) -> Account | None:
     account = await get_account(db, nit)
@@ -76,13 +78,34 @@ async def update_account(
         account.cert_password = encrypt_credential(cert_password)
     if preferred_api is not None:
         account.preferred_api = preferred_api
+    if affiliation is not None:
+        account.affiliation = affiliation
+    if name is not None:
+        account.name = name
     if status is not None:
         account.status = status
 
     account.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(account)
+
+    from backend.services.session_manager import evict
+    evict(nit)
+
     return account
+
+
+async def delete_account(db: AsyncSession, nit: str) -> bool:
+    account = await get_account(db, nit)
+    if not account:
+        return False
+    await db.execute(sql_delete(Account).where(Account.nit == nit))
+    await db.commit()
+
+    from backend.services.session_manager import evict
+    evict(nit)
+
+    return True
 
 
 async def deactivate_account(db: AsyncSession, nit: str) -> bool:
@@ -92,4 +115,8 @@ async def deactivate_account(db: AsyncSession, nit: str) -> bool:
     account.status = "inactive"
     account.updated_at = datetime.utcnow()
     await db.commit()
+
+    from backend.services.session_manager import evict
+    evict(nit)
+
     return True

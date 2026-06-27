@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setKey, api } from '../lib/api';
 import { Key } from 'lucide-react';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
   const [key, setKeyInput] = useState('');
@@ -26,19 +27,18 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-      <form onSubmit={handleSubmit} className="bg-bg-secondary p-8 rounded-xl w-96 shadow-2xl border border-slate-700">
+    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] px-4">
+      <form onSubmit={handleSubmit} className="bg-[#1e293b] p-6 sm:p-8 rounded-xl w-full max-w-sm shadow-2xl border border-slate-700">
         <div className="flex items-center gap-3 mb-6">
           <Key size={28} className="text-accent" />
           <h1 className="text-2xl font-bold text-white">OpenFEL</h1>
         </div>
         <p className="text-slate-400 text-sm mb-6">Ingresa tu API key para acceder al dashboard.</p>
-        <input
-          type="password"
+        <PasswordInput
           value={key}
-          onChange={e => setKeyInput(e.target.value)}
+          onChange={setKeyInput}
           placeholder="ofel_k1_..."
-          className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-accent mb-4"
+          className="px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-accent mb-4"
         />
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
         <button

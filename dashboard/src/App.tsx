@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { hasKey } from './lib/api';
+import { applyTheme } from './lib/theme';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,6 +10,9 @@ import Emit from './pages/Emit';
 import Query from './pages/Query';
 import Health from './pages/Health';
 import Logs from './pages/Logs';
+import Docs from './pages/Docs';
+
+applyTheme();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return hasKey() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -27,6 +31,7 @@ export default function App() {
           <Route path="/query" element={<Query />} />
           <Route path="/health" element={<Health />} />
           <Route path="/logs" element={<Logs />} />
+          <Route path="/docs" element={<Docs />} />
         </Route>
       </Routes>
     </BrowserRouter>

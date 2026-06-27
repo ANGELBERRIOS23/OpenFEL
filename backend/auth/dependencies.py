@@ -6,9 +6,8 @@ from fastapi import Header, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import settings
 from backend.database import get_db
-from backend.auth.crypto import hash_api_key
+from backend.auth.crypto import hash_api_key, get_master_key
 from backend.models.api_key import ApiKey
 
 
@@ -23,7 +22,8 @@ async def get_current_key(
     db: AsyncSession = Depends(get_db),
 ) -> ApiKey:
     # Master key bypass
-    if settings.OPENFEL_MASTER_KEY and x_api_key == settings.OPENFEL_MASTER_KEY:
+    master = get_master_key()
+    if master and x_api_key == master:
         master = ApiKey(
             id=0, name="Master Key", key_hash="", key_prefix="master",
             role="ADMIN", is_active=True, allowed_accounts="",

@@ -6,16 +6,16 @@ from cryptography.fernet import Fernet
 from backend.config import settings
 
 _fernet: Fernet | None = None
+_master_key: str = ""
 
 
 def _get_fernet() -> Fernet:
-    global _fernet
+    global _fernet, _master_key
     if _fernet:
         return _fernet
 
     key = settings.OPENFEL_MASTER_KEY
     if not key:
-        key_file = settings.DATA_DIR / ".openfel_master_key" if hasattr(settings, "DATA_DIR") else None
         from backend.config import DATA_DIR
         key_file = DATA_DIR / ".openfel_master_key"
         if key_file.exists():
@@ -26,8 +26,14 @@ def _get_fernet() -> Fernet:
             print(f"\n  [OpenFEL] Generated master encryption key (saved to {key_file})")
             print(f"  Set OPENFEL_MASTER_KEY={key} in .env for production\n")
 
+    _master_key = key
     _fernet = Fernet(key.encode() if isinstance(key, str) else key)
     return _fernet
+
+
+def get_master_key() -> str:
+    _get_fernet()
+    return _master_key
 
 
 def encrypt_credential(plaintext: str) -> str:

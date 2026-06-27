@@ -38,9 +38,9 @@ async def create_key(
     except KeyError:
         raise HTTPException(400, f"Invalid role: {body.role}")
 
-    resp = ApiKeyCreated.model_validate(api_key)
-    resp.full_key = full_key
-    return resp
+    data = ApiKeyResponse.model_validate(api_key).model_dump()
+    data["full_key"] = full_key
+    return ApiKeyCreated(**data)
 
 
 @router.patch("/{key_id}", response_model=ApiKeyResponse)

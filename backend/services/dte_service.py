@@ -9,6 +9,17 @@ from backend.services import session_manager
 logger = logging.getLogger(__name__)
 
 
+def _extract_items(result) -> list:
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        for key in ("items", "data", "dtes", "listado"):
+            if key in result and isinstance(result[key], list):
+                return result[key]
+        return [result]
+    return []
+
+
 async def consultar_nit(db: AsyncSession, account_nit: str, nit_consulta: str) -> dict:
     client = await session_manager.get_client(db, account_nit)
     start = time.time()
@@ -39,8 +50,9 @@ async def emitir_dte(
         export_flag=export,
     )
     duration = int((time.time() - start) * 1000)
-    result["duration_ms"] = duration
-    result["source"] = client.stats().get("last_source", "unknown")
+    if isinstance(result, dict):
+        result["duration_ms"] = duration
+        result["source"] = "fallback"
     return result
 
 
@@ -49,26 +61,27 @@ async def anular_dte(db: AsyncSession, account_nit: str, uuid: str, motivo: str 
     start = time.time()
     result = await asyncio.to_thread(client.anular, uuid, motivo=motivo)
     duration = int((time.time() - start) * 1000)
-    result["duration_ms"] = duration
+    if isinstance(result, dict):
+        result["duration_ms"] = duration
     return result
 
 
 async def listar_emitidos(db: AsyncSession, account_nit: str) -> dict:
     client = await session_manager.get_client(db, account_nit)
     start = time.time()
-    items = await asyncio.to_thread(client.listar_emitidos)
+    raw = await asyncio.to_thread(client.listar_emitidos)
     duration = int((time.time() - start) * 1000)
-    source = client.stats().get("last_source", "unknown")
-    return {"total": len(items), "items": items, "source": source, "duration_ms": duration}
+    items = _extract_items(raw)
+    return {"total": len(items), "items": items, "source": "mobile", "duration_ms": duration}
 
 
 async def listar_recibidos(db: AsyncSession, account_nit: str) -> dict:
     client = await session_manager.get_client(db, account_nit)
     start = time.time()
-    items = await asyncio.to_thread(client.listar_recibidos)
+    raw = await asyncio.to_thread(client.listar_recibidos)
     duration = int((time.time() - start) * 1000)
-    source = client.stats().get("last_source", "unknown")
-    return {"total": len(items), "items": items, "source": source, "duration_ms": duration}
+    items = _extract_items(raw)
+    return {"total": len(items), "items": items, "source": "mobile", "duration_ms": duration}
 
 
 async def detalle_dte(db: AsyncSession, account_nit: str, uuid: str) -> dict:
@@ -76,8 +89,7 @@ async def detalle_dte(db: AsyncSession, account_nit: str, uuid: str) -> dict:
     start = time.time()
     data = await asyncio.to_thread(client.detalle_dte, uuid, account_nit)
     duration = int((time.time() - start) * 1000)
-    source = client.stats().get("last_source", "unknown")
-    return {"uuid": uuid, "data": data, "source": source, "duration_ms": duration}
+    return {"uuid": uuid, "data": data, "source": "mobile", "duration_ms": duration}
 
 
 async def descargar_pdf(db: AsyncSession, account_nit: str, uuid: str) -> bytes:

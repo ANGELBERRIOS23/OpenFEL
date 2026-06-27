@@ -8,13 +8,16 @@ class AccountCreate(BaseModel):
     nit: str
     login_password: str
     cert_password: str
-    preferred_api: str = "mobile"
+    preferred_api: str = "mixed"
+    affiliation: str = "GEN"
 
 
 class AccountUpdate(BaseModel):
     login_password: Optional[str] = None
     cert_password: Optional[str] = None
     preferred_api: Optional[str] = None
+    affiliation: Optional[str] = None
+    name: Optional[str] = None
     status: Optional[str] = None
 
 

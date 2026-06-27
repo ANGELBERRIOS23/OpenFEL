@@ -34,6 +34,7 @@ async def create_account(
         login_password=body.login_password,
         cert_password=body.cert_password,
         preferred_api=body.preferred_api,
+        affiliation=body.affiliation,
     )
     return account
 
@@ -63,6 +64,8 @@ async def update_account(
         login_password=body.login_password,
         cert_password=body.cert_password,
         preferred_api=body.preferred_api,
+        affiliation=body.affiliation,
+        name=body.name,
         status=body.status,
     )
     if not updated:
@@ -71,10 +74,10 @@ async def update_account(
 
 
 @router.delete("/{nit}", status_code=204)
-async def deactivate_account(
+async def delete_account(
     nit: str,
     _key: ApiKey = require_role(Role.ADMIN),
     db: AsyncSession = Depends(get_db),
 ):
-    if not await account_service.deactivate_account(db, nit):
+    if not await account_service.delete_account(db, nit):
         raise HTTPException(404, "Account not found")
