@@ -196,11 +196,13 @@ async def download_custom_pdf(
             detail, nit_emisor=account_nit, branding=branding, logo_b64=logo_b64,
         )
         return Response(
-            content=pdf_bytes,
+            content=bytes(pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={uuid}_custom.pdf"},
         )
     except Exception as e:
+        import logging, traceback
+        logging.getLogger("openfel").error(f"Custom PDF error: {traceback.format_exc()}")
         raise HTTPException(502, f"PDF generation error: {e}")
 
 
@@ -224,9 +226,11 @@ async def download_pos_receipt(
             detail, nit_emisor=account_nit, width_mm=width,
         )
         return Response(
-            content=pdf_bytes,
+            content=bytes(pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={uuid}_receipt.pdf"},
         )
     except Exception as e:
+        import logging, traceback
+        logging.getLogger("openfel").error(f"POS receipt error: {traceback.format_exc()}")
         raise HTTPException(502, f"POS receipt error: {e}")

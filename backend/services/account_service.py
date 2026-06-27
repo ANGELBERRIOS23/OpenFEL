@@ -1,3 +1,6 @@
+import base64
+import io
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -6,6 +9,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.crypto import encrypt_credential, decrypt_credential
 from backend.models.account import Account
+
+logger = logging.getLogger(__name__)
+
+MAX_LOGO_PX = 400
+
+
+def _compress_logo(b64_data: str) -> str:
+    try:
+        from PIL import Image
+        raw = base64.b64decode(b64_data)
+        img = Image.open(io.BytesIO(raw))
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
+        img.thumbnail((MAX_LOGO_PX, MAX_LOGO_PX), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        compressed = base64.b64encode(buf.getvalue()).decode()
+        original_kb = len(b64_data) * 3 // 4 // 1024
+        compressed_kb = len(compressed) * 3 // 4 // 1024
+        logger.info(f"Logo compressed: {original_kb}KB -> {compressed_kb}KB ({img.size[0]}x{img.size[1]})")
+        return compressed
+    except Exception as e:
+        logger.warning(f"Logo compression failed, storing original: {e}")
+        return b64_data
 
 
 async def create_account(
@@ -88,7 +117,10 @@ async def update_account(
     if branding is not None:
         for field in ("color_primario", "color_secundario", "telefono", "email", "web", "logo_b64"):
             if field in branding:
-                setattr(account, field, branding[field] or "")
+                value = branding[field] or ""
+                if field == "logo_b64" and value:
+                    value = _compress_logo(value)
+                setattr(account, field, value)
 
     account.updated_at = datetime.utcnow()
     await db.commit()

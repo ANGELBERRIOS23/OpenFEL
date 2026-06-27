@@ -117,15 +117,34 @@ def format_nit(nit_str):
 
 
 def fmt_date(fecha_iso):
+    if not fecha_iso:
+        return ""
+    if '/' in fecha_iso[:10]:
+        return fecha_iso[:10]
     p = fecha_iso[:10].split('-')
-    return f"{p[2]}/{p[1]}/{p[0]}"
+    if len(p) == 3:
+        return f"{p[2]}/{p[1]}/{p[0]}"
+    return fecha_iso[:10]
 
 
 def fmt_datetime(fecha_iso):
-    return f"{fmt_date(fecha_iso)} {fecha_iso[11:19]}"
+    if not fecha_iso:
+        return ""
+    date_part = fmt_date(fecha_iso)
+    time_part = ""
+    if 'T' in fecha_iso:
+        time_part = fecha_iso.split('T')[1][:8]
+    elif ' ' in fecha_iso:
+        time_part = fecha_iso.split(' ')[1][:8] if len(fecha_iso.split(' ')) > 1 else ""
+    return f"{date_part} {time_part}".strip()
 
 
 def date_parts(fecha_iso):
+    if not fecha_iso:
+        return ["", "", ""]
+    if '/' in fecha_iso[:10]:
+        p = fecha_iso[:10].split('/')
+        return [p[2], p[1], p[0]] if len(p) == 3 else ["", "", ""]
     p = fecha_iso[:10].split('-')
     return int(p[2]), int(p[1]), int(p[0])
 
