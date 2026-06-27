@@ -67,6 +67,28 @@ export const api = {
     emitted: (account_nit: string) => request<any>(`/dte/emitted?account_nit=${account_nit}`),
     received: (account_nit: string) => request<any>(`/dte/received?account_nit=${account_nit}`),
     detail: (uuid: string, account_nit: string) => request<any>(`/dte/${uuid}/detail?account_nit=${account_nit}`),
+    downloadPdf: async (uuid: string, account_nit: string) => {
+      const res = await fetch(`${BASE}/dte/${uuid}/pdf?account_nit=${account_nit}`, {
+        headers: { 'X-API-Key': getKey() },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${uuid}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    },
+    downloadXml: async (uuid: string, account_nit: string) => {
+      const res = await fetch(`${BASE}/dte/${uuid}/xml?account_nit=${account_nit}`, {
+        headers: { 'X-API-Key': getKey() },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${uuid}.xml`; a.click();
+      URL.revokeObjectURL(url);
+    },
   },
 
   logs: {

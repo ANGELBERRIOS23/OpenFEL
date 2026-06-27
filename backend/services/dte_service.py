@@ -95,3 +95,10 @@ async def detalle_dte(db: AsyncSession, account_nit: str, uuid: str) -> dict:
 async def descargar_pdf(db: AsyncSession, account_nit: str, uuid: str) -> bytes:
     client = await session_manager.get_client(db, account_nit)
     return await asyncio.to_thread(client.descargar_pdf, uuid, account_nit)
+
+
+async def descargar_xml(db: AsyncSession, account_nit: str, uuid: str) -> bytes:
+    client = await session_manager.get_client(db, account_nit)
+    if hasattr(client, 'descargar_xml'):
+        return await asyncio.to_thread(client.descargar_xml, uuid, account_nit)
+    raise ValueError("XML download requires web API (not available on mobile-only accounts)")

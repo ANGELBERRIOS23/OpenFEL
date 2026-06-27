@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, Trash2, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Search, Loader2 } from 'lucide-react';
 import { useTheme } from '../lib/useThemeClasses';
 import PasswordInput from '../components/PasswordInput';
 
@@ -15,20 +15,48 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editNit, setEditNit] = useState<string | null>(null);
-  const [form, setForm] = useState({ nit: '', login_password: '', cert_password: '', preferred_api: 'mixed', affiliation: 'GEN' });
+  const [form, setForm] = useState({ nit: '', login_password: '', cert_password: '', preferred_api: 'mixed', affiliation: 'GEN', name: '' });
   const [editForm, setEditForm] = useState({ login_password: '', cert_password: '', preferred_api: '', affiliation: '', name: '' });
   const [error, setError] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
+  const [nitHint, setNitHint] = useState('');
 
   const load = () => api.accounts.list().then(setAccounts).catch(() => {});
   useEffect(() => { load(); }, []);
+
+  async function smartLookup() {
+    if (!form.nit || form.nit.length < 4) { setNitHint('NIT muy corto'); return; }
+    const activeAccount = accounts.find(a => a.status === 'active');
+    if (!activeAccount) { setNitHint('Se necesita al menos una cuenta activa para buscar NIT'); return; }
+    setLookingUp(true);
+    setNitHint('');
+    try {
+      const res = await api.nit.lookup(activeAccount.nit, form.nit);
+      const nombre = res.nombre || '';
+      setForm(prev => ({ ...prev, name: nombre }));
+      const lower = nombre.toLowerCase();
+      if (lower.includes('pequeño contribuyente') || lower.includes('peq')) {
+        setForm(prev => ({ ...prev, affiliation: 'PEQ' }));
+        setNitHint(`${nombre} (auto-detectado: PEQ)`);
+      } else {
+        setForm(prev => ({ ...prev, affiliation: 'GEN' }));
+        setNitHint(`${nombre} (auto-detectado: GEN)`);
+      }
+    } catch (err: any) {
+      setNitHint(`Error: ${err.message}`);
+    } finally {
+      setLookingUp(false);
+    }
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     try {
       await api.accounts.create(form);
-      setForm({ nit: '', login_password: '', cert_password: '', preferred_api: 'mixed', affiliation: 'GEN' });
+      setForm({ nit: '', login_password: '', cert_password: '', preferred_api: 'mixed', affiliation: 'GEN', name: '' });
       setShowForm(false);
+      setNitHint('');
       load();
     } catch (err: any) {
       setError(err.message);
@@ -77,23 +105,35 @@ export default function Accounts() {
       {showForm && (
         <form onSubmit={create} className={`rounded-xl border p-4 sm:p-5 mb-6 space-y-4 ${t.card}`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <input value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="NIT" className={`px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
+            <div>
+              <label className={`${t.textXs} text-xs block mb-1`}>NIT</label>
+              <div className="flex gap-2">
+                <input value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="120405237" className={`flex-1 px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
+                <button type="button" onClick={smartLookup} disabled={lookingUp} className={`px-3 py-2 rounded-lg cursor-pointer ${t.btnSecondary} disabled:opacity-50`} title="Auto-detectar nombre y afiliación">
+                  {lookingUp ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                </button>
+              </div>
+              {nitHint && <p className={`text-xs mt-1 ${nitHint.startsWith('Error') ? 'text-red-400' : 'text-green-500'}`}>{nitHint}</p>}
+            </div>
+            <div>
+              <label className={`${t.textXs} text-xs block mb-1`}>Nombre (opcional)</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Se auto-rellena con buscar NIT" className={`w-full px-3 py-2 border rounded-lg text-sm ${t.input}`} />
+            </div>
             <select value={form.preferred_api} onChange={e => setForm({ ...form, preferred_api: e.target.value })} className={`px-3 py-2 border rounded-lg text-sm ${t.input}`}>
               {API_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
-            <PasswordInput value={form.login_password} onChange={v => setForm({ ...form, login_password: v })} placeholder="Contraseña login" className={`px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
-            <PasswordInput value={form.cert_password} onChange={v => setForm({ ...form, cert_password: v })} placeholder="Contraseña certificación" className={`px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
             <select value={form.affiliation} onChange={e => setForm({ ...form, affiliation: e.target.value })} className={`px-3 py-2 border rounded-lg text-sm ${t.input}`}>
               <option value="GEN">GEN — General</option>
               <option value="PEQ">PEQ — Pequeño contribuyente</option>
             </select>
+            <PasswordInput value={form.login_password} onChange={v => setForm({ ...form, login_password: v })} placeholder="Contraseña login" className={`px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
+            <PasswordInput value={form.cert_password} onChange={v => setForm({ ...form, cert_password: v })} placeholder="Contraseña certificación" className={`px-3 py-2 border rounded-lg text-sm ${t.input}`} required />
           </div>
           {error && !editNit && <p className="text-red-400 text-sm">{error}</p>}
           <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm cursor-pointer">Crear</button>
         </form>
       )}
 
-      {/* Edit modal */}
       {editNit && (
         <form onSubmit={saveEdit} className={`rounded-xl border p-4 sm:p-5 mb-6 space-y-4 ${t.card}`}>
           <div className="flex items-center justify-between mb-2">
@@ -117,7 +157,6 @@ export default function Accounts() {
         </form>
       )}
 
-      {/* Table (responsive: cards on mobile) */}
       <div className={`rounded-xl border overflow-hidden ${t.card}`}>
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
@@ -136,10 +175,10 @@ export default function Accounts() {
                 <tr key={a.nit} className={`border-b ${t.borderSub} last:border-0`}>
                   <td className={`px-4 py-3 ${t.textH} font-mono`}>{a.nit}</td>
                   <td className={`px-4 py-3 ${t.text}`}>{a.name || '—'}</td>
-                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs ${t.badge}`}>{a.affiliation}</span></td>
+                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs ${a.affiliation === 'PEQ' ? t.badgeAmber : t.badge}`}>{a.affiliation}</span></td>
                   <td className={`px-4 py-3 ${t.textMuted}`}>{a.preferred_api}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${a.status === 'active' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs ${a.status === 'active' ? t.badgeGreen : t.badgeRed}`}>
                       {a.status}
                     </span>
                   </td>
@@ -155,13 +194,12 @@ export default function Accounts() {
             </tbody>
           </table>
         </div>
-        {/* Mobile cards */}
         <div className="sm:hidden divide-y divide-slate-700/50">
           {accounts.map(a => (
             <div key={a.nit} className="p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className={`${t.textH} font-mono font-bold`}>{a.nit}</span>
-                <span className={`px-2 py-0.5 rounded text-xs ${a.status === 'active' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>{a.status}</span>
+                <span className={`px-2 py-0.5 rounded text-xs ${a.status === 'active' ? t.badgeGreen : t.badgeRed}`}>{a.status}</span>
               </div>
               <div className={`text-sm ${t.text}`}>{a.name || '—'} · {a.affiliation} · {a.preferred_api}</div>
               <div className="flex gap-2">

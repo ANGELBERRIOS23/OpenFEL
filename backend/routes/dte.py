@@ -132,3 +132,22 @@ async def download_pdf(
         )
     except Exception as e:
         raise HTTPException(502, f"SAT error: {e}")
+
+
+@router.get("/dte/{uuid}/xml")
+async def download_xml(
+    uuid: str,
+    account_nit: str,
+    key: ApiKey = require_role(Role.VIEWER),
+    db: AsyncSession = Depends(get_db),
+):
+    check_account_access(key, account_nit)
+    try:
+        xml_bytes = await dte_service.descargar_xml(db, account_nit, uuid)
+        return Response(
+            content=xml_bytes,
+            media_type="application/xml",
+            headers={"Content-Disposition": f"attachment; filename={uuid}.xml"},
+        )
+    except Exception as e:
+        raise HTTPException(502, f"SAT error: {e}")

@@ -32,10 +32,10 @@ export default function Health() {
 
       {health && (
         <div className="mb-6">
-          <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold ${
-            health.overall === 'healthy' ? 'bg-green-900/30 text-green-400 border border-green-700' :
-            health.overall === 'degraded' ? 'bg-amber-900/30 text-amber-400 border border-amber-700' :
-            'bg-red-900/30 text-red-400 border border-red-700'
+          <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border ${
+            health.overall === 'healthy' ? t.badgeGreen :
+            health.overall === 'degraded' ? t.badgeAmber :
+            t.badgeRed
           }`}>
             {health.overall === 'healthy' ? <Wifi size={16} /> : <WifiOff size={16} />}
             {health.overall.toUpperCase()}
@@ -49,7 +49,7 @@ export default function Health() {
           <div key={i} className={`rounded-xl border p-4 sm:p-5 ${t.card}`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className={`${t.textH} font-semibold text-sm sm:text-base`}>{s.server}</h3>
-              <span className={`px-2 py-0.5 rounded text-xs ${s.status === 'online' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+              <span className={`px-2 py-0.5 rounded text-xs ${s.status === 'online' ? t.badgeGreen : t.badgeRed}`}>
                 {s.status}
               </span>
             </div>

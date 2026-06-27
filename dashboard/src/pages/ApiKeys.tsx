@@ -135,15 +135,15 @@ export default function ApiKeys() {
                     <td className={`px-4 py-3 font-mono ${t.textMuted} text-xs`}>{k.key_prefix}...</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs ${
-                        k.role === 'ADMIN' ? 'bg-purple-900/30 text-purple-400' :
-                        k.role === 'OPERATOR' ? 'bg-blue-900/30 text-blue-400' :
-                        `${t.badge}`
+                        k.role === 'ADMIN' ? t.badgePurple :
+                        k.role === 'OPERATOR' ? t.badgeBlue :
+                        t.badge
                       }`}>{k.role}</span>
                     </td>
                     <td className={`px-4 py-3 ${t.textMuted} text-xs`}>{allowed.length > 0 ? allowed.join(', ') : 'Todas'}</td>
                     <td className={`px-4 py-3 ${t.textMuted}`}>{k.usage_count}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs ${k.is_active ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs ${k.is_active ? t.badgeGreen : t.badgeRed}`}>
                         {k.is_active ? 'Activa' : 'Revocada'}
                       </span>
                     </td>
@@ -165,7 +165,7 @@ export default function ApiKeys() {
             <div key={k.id} className="p-4 space-y-1">
               <div className="flex items-center justify-between">
                 <span className={`${t.textH} font-semibold`}>{k.name}</span>
-                <span className={`px-2 py-0.5 rounded text-xs ${k.is_active ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                <span className={`px-2 py-0.5 rounded text-xs ${k.is_active ? t.badgeGreen : t.badgeRed}`}>
                   {k.is_active ? 'Activa' : 'Revocada'}
                 </span>
               </div>

@@ -64,7 +64,7 @@ export default function Logs() {
                   <td className={`px-4 py-3 ${t.text} font-mono text-xs`}>{log.account_nit || '—'}</td>
                   <td className={`px-4 py-3 ${t.textXs} text-xs`}>{log.api_key_prefix || '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${log.response_status < 300 ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs ${log.response_status < 300 ? t.badgeGreen : t.badgeRed}`}>
                       {log.response_status}
                     </span>
                   </td>
@@ -86,7 +86,7 @@ export default function Logs() {
           <div key={log.id} className="p-4 space-y-1">
             <div className="flex justify-between">
               <span className={`${t.textH} font-mono text-xs`}>{log.action}</span>
-              <span className={`px-2 py-0.5 rounded text-xs ${log.response_status < 300 ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>{log.response_status}</span>
+              <span className={`px-2 py-0.5 rounded text-xs ${log.response_status < 300 ? t.badgeGreen : t.badgeRed}`}>{log.response_status}</span>
             </div>
             <div className={`text-xs ${t.textMuted}`}>{log.timestamp} · {log.duration_ms}ms</div>
             {log.account_nit && <div className={`text-xs ${t.text}`}>NIT: {log.account_nit}</div>}

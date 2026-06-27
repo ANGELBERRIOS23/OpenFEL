@@ -10,6 +10,7 @@ class AccountCreate(BaseModel):
     cert_password: str
     preferred_api: str = "mixed"
     affiliation: str = "GEN"
+    name: str = ""
 
 
 class AccountUpdate(BaseModel):

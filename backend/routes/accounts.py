@@ -35,6 +35,7 @@ async def create_account(
         cert_password=body.cert_password,
         preferred_api=body.preferred_api,
         affiliation=body.affiliation,
+        name=body.name,
     )
     return account
 

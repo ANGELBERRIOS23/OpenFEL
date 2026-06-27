@@ -57,7 +57,7 @@ export default function DashboardPage() {
                   {log.account_nit && <span className={`${t.textMuted} text-xs ml-2 hidden sm:inline`}>NIT: {log.account_nit}</span>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className={`text-xs px-2 py-0.5 rounded ${log.response_status < 300 ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded ${log.response_status < 300 ? t.badgeGreen : t.badgeRed}`}>
                     {log.response_status}
                   </span>
                   <span className={`${t.textXs} text-xs`}>{log.duration_ms}ms</span>
