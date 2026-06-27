@@ -131,8 +131,8 @@ class SatFallbackClient:
         if tipo_dte is None:
             tipo_dte = "FPEQ" if self.afiliacion == "PEQ" else "FACT"
 
-        # Try preferred API first
-        if self.prefer == "mobile" and self._movil_available:
+        # Try preferred API first (mixed = mobile first with web fallback)
+        if self.prefer in ("mobile", "mixed") and self._movil_available:
             result = self._try_emitir_movil(
                 tipo_dte, nit_receptor, nombre_receptor, direccion_receptor, items, moneda, **kwargs
             )

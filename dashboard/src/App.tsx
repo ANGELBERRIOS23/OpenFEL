@@ -11,6 +11,7 @@ import Query from './pages/Query';
 import Health from './pages/Health';
 import Logs from './pages/Logs';
 import Docs from './pages/Docs';
+import Playground from './pages/Playground';
 
 applyTheme();
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/health" element={<Health />} />
           <Route path="/logs" element={<Logs />} />
           <Route path="/docs" element={<Docs />} />
+          <Route path="/playground" element={<Playground />} />
         </Route>
       </Routes>
     </BrowserRouter>

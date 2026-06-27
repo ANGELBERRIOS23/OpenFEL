@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Search, XCircle, FileText, FileCode } from 'lucide-react';
+import { Search, XCircle, FileText, FileCode, Printer, Palette } from 'lucide-react';
 import { useTheme } from '../lib/useThemeClasses';
 
 export default function Query() {
@@ -80,11 +80,13 @@ export default function Query() {
     }
   }
 
-  async function downloadFile(uuid: string, type: 'pdf' | 'xml') {
+  async function downloadFile(uuid: string, type: 'pdf' | 'xml' | 'custom-pdf' | 'pos', nitReceptor: string = 'CF') {
     setDownloading(`${uuid}-${type}`);
     try {
-      if (type === 'pdf') await api.dte.downloadPdf(uuid, accountNit);
-      else await api.dte.downloadXml(uuid, accountNit);
+      if (type === 'pdf') await api.dte.downloadPdf(uuid, accountNit, nitReceptor);
+      else if (type === 'xml') await api.dte.downloadXml(uuid, accountNit, nitReceptor);
+      else if (type === 'custom-pdf') await api.dte.downloadCustomPdf(uuid, accountNit, nitReceptor);
+      else if (type === 'pos') await api.dte.downloadPosReceipt(uuid, accountNit, nitReceptor);
     } catch (err: any) {
       setError(`Error descargando ${type.toUpperCase()}: ${err.message}`);
     } finally {
@@ -95,6 +97,7 @@ export default function Query() {
   function getUuid(item: any) { return item.uuid || item.UUID || item.numeroAutorizacion || ''; }
   function getEstado(item: any) { return item.estado || item.Estado || item.estadoDte || ''; }
   function isAnulado(estado: string) { return estado === 'A' || estado === 'Anulado'; }
+  function getNitReceptor(item: any) { return item.nitReceptor || item.NITReceptor || item.nitEmisor || item.NITEmisor || 'CF'; }
 
   return (
     <div>
@@ -175,6 +178,7 @@ export default function Query() {
                 const uuid = getUuid(item);
                 const estado = getEstado(item);
                 const anulado = isAnulado(estado);
+                const nitR = getNitReceptor(item);
                 return (
                   <tr key={i} className={`border-b ${t.borderSub} last:border-0`}>
                     <td className={`px-4 py-3 font-mono text-xs ${t.text}`} title={uuid}>{uuid.slice(0, 8)}...</td>
@@ -193,10 +197,16 @@ export default function Query() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        <button onClick={() => downloadFile(uuid, 'pdf')} disabled={downloading === `${uuid}-pdf`} className={`p-1 rounded ${t.textMuted} hover:text-accent cursor-pointer disabled:opacity-50`} title="Descargar PDF">
+                        <button onClick={() => downloadFile(uuid, 'pdf', nitR)} disabled={downloading === `${uuid}-pdf`} className={`p-1 rounded ${t.textMuted} hover:text-accent cursor-pointer disabled:opacity-50`} title="PDF SAT">
                           <FileText size={14} />
                         </button>
-                        <button onClick={() => downloadFile(uuid, 'xml')} disabled={downloading === `${uuid}-xml`} className={`p-1 rounded ${t.textMuted} hover:text-accent cursor-pointer disabled:opacity-50`} title="Descargar XML">
+                        <button onClick={() => downloadFile(uuid, 'custom-pdf', nitR)} disabled={downloading === `${uuid}-custom-pdf`} className={`p-1 rounded ${t.textMuted} hover:text-purple-400 cursor-pointer disabled:opacity-50`} title="PDF Personalizado">
+                          <Palette size={14} />
+                        </button>
+                        <button onClick={() => downloadFile(uuid, 'pos', nitR)} disabled={downloading === `${uuid}-pos`} className={`p-1 rounded ${t.textMuted} hover:text-amber-400 cursor-pointer disabled:opacity-50`} title="Recibo POS">
+                          <Printer size={14} />
+                        </button>
+                        <button onClick={() => downloadFile(uuid, 'xml', nitR)} disabled={downloading === `${uuid}-xml`} className={`p-1 rounded ${t.textMuted} hover:text-accent cursor-pointer disabled:opacity-50`} title="XML">
                           <FileCode size={14} />
                         </button>
                         {!anulado && tab === 'emitted' && (
@@ -223,6 +233,7 @@ export default function Query() {
           const uuid = getUuid(item);
           const estado = getEstado(item);
           const anulado = isAnulado(estado);
+          const nitR = getNitReceptor(item);
           return (
             <div key={i} className="p-4 space-y-2">
               <div className="flex justify-between items-start">
@@ -233,9 +244,11 @@ export default function Query() {
               </div>
               <div className={`text-sm ${t.textH}`}>{item.tipo || item.Tipo || '—'} · Q{item.total || item.MontoTotal || '—'}</div>
               <div className={`text-xs ${t.textMuted}`}>{item.fecha || item.FechaEmision || '—'}</div>
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => downloadFile(uuid, 'pdf')} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileText size={12} /> PDF</button>
-                <button onClick={() => downloadFile(uuid, 'xml')} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileCode size={12} /> XML</button>
+              <div className="flex gap-3 pt-1 flex-wrap">
+                <button onClick={() => downloadFile(uuid, 'pdf', nitR)} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileText size={12} /> PDF</button>
+                <button onClick={() => downloadFile(uuid, 'custom-pdf', nitR)} className="flex items-center gap-1 text-xs text-purple-400 cursor-pointer"><Palette size={12} /> Custom</button>
+                <button onClick={() => downloadFile(uuid, 'pos', nitR)} className="flex items-center gap-1 text-xs text-amber-400 cursor-pointer"><Printer size={12} /> POS</button>
+                <button onClick={() => downloadFile(uuid, 'xml', nitR)} className="flex items-center gap-1 text-xs text-accent cursor-pointer"><FileCode size={12} /> XML</button>
                 {!anulado && tab === 'emitted' && <button onClick={() => annul(uuid)} className="text-xs text-red-400 cursor-pointer">Anular</button>}
               </div>
             </div>

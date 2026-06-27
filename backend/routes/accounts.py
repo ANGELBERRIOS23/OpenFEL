@@ -10,15 +10,16 @@ from backend.services import account_service
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
 
 
-@router.get("", response_model=list[AccountResponse])
+@router.get("")
 async def list_accounts(
     _key: ApiKey = require_role(Role.ADMIN),
     db: AsyncSession = Depends(get_db),
 ):
-    return await account_service.list_accounts(db)
+    accounts = await account_service.list_accounts(db)
+    return [AccountResponse.from_orm_account(a) for a in accounts]
 
 
-@router.post("", response_model=AccountResponse, status_code=201)
+@router.post("", status_code=201)
 async def create_account(
     body: AccountCreate,
     _key: ApiKey = require_role(Role.ADMIN),
@@ -37,10 +38,10 @@ async def create_account(
         affiliation=body.affiliation,
         name=body.name,
     )
-    return account
+    return AccountResponse.from_orm_account(account)
 
 
-@router.get("/{nit}", response_model=AccountResponse)
+@router.get("/{nit}")
 async def get_account(
     nit: str,
     _key: ApiKey = require_role(Role.ADMIN),
@@ -49,10 +50,10 @@ async def get_account(
     account = await account_service.get_account(db, nit)
     if not account:
         raise HTTPException(404, "Account not found")
-    return account
+    return AccountResponse.from_orm_account(account)
 
 
-@router.patch("/{nit}", response_model=AccountResponse)
+@router.patch("/{nit}")
 async def update_account(
     nit: str,
     body: AccountUpdate,
@@ -68,10 +69,11 @@ async def update_account(
         affiliation=body.affiliation,
         name=body.name,
         status=body.status,
+        branding=body.branding.model_dump() if body.branding else None,
     )
     if not updated:
         raise HTTPException(404, "Account not found")
-    return updated
+    return AccountResponse.from_orm_account(updated)
 
 
 @router.delete("/{nit}", status_code=204)

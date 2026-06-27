@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query as Q
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from backend.schemas.dte import (
     DteEmitResponse, DteAnnulResponse, DteListResponse, DteDetailResponse,
 )
 from backend.services import dte_service
+from backend.services import account_service
 
 router = APIRouter(prefix="/api", tags=["DTE"])
 
@@ -46,13 +47,20 @@ async def emit_dte(
             complemento=body.complemento,
             export=body.export,
         )
+        if result.get("error"):
+            raise HTTPException(502, f"SAT error: {result['error']} | mobile: {result.get('mobile_error','')} | web: {result.get('web_error','')}")
+        uuid = result.get("uuid", "")
+        if not uuid:
+            raise HTTPException(502, f"SAT error: emission returned empty UUID — {result}")
         return DteEmitResponse(
-            uuid=result.get("uuid", ""),
+            uuid=uuid,
             serie=result.get("serie", ""),
             numero=result.get("numero", ""),
             fecha_certificacion=result.get("fecha_certificacion", ""),
             source=result.get("source", "unknown"),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(502, f"SAT error: {e}")
 
@@ -119,12 +127,13 @@ async def detail_dte(
 async def download_pdf(
     uuid: str,
     account_nit: str,
+    nit_receptor: str = "CF",
     key: ApiKey = require_role(Role.VIEWER),
     db: AsyncSession = Depends(get_db),
 ):
     check_account_access(key, account_nit)
     try:
-        pdf_bytes = await dte_service.descargar_pdf(db, account_nit, uuid)
+        pdf_bytes = await dte_service.descargar_pdf(db, account_nit, uuid, nit_receptor)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -138,16 +147,86 @@ async def download_pdf(
 async def download_xml(
     uuid: str,
     account_nit: str,
+    nit_receptor: str = "CF",
     key: ApiKey = require_role(Role.VIEWER),
     db: AsyncSession = Depends(get_db),
 ):
     check_account_access(key, account_nit)
     try:
-        xml_bytes = await dte_service.descargar_xml(db, account_nit, uuid)
+        xml_str = await dte_service.descargar_xml(db, account_nit, uuid, nit_receptor)
+        content = xml_str.encode("utf-8") if isinstance(xml_str, str) else xml_str
         return Response(
-            content=xml_bytes,
+            content=content,
             media_type="application/xml",
             headers={"Content-Disposition": f"attachment; filename={uuid}.xml"},
         )
     except Exception as e:
         raise HTTPException(502, f"SAT error: {e}")
+
+
+@router.get("/dte/{uuid}/custom-pdf")
+async def download_custom_pdf(
+    uuid: str,
+    account_nit: str,
+    nit_receptor: str = "CF",
+    key: ApiKey = require_role(Role.VIEWER),
+    db: AsyncSession = Depends(get_db),
+):
+    check_account_access(key, account_nit)
+    try:
+        from backend.services.pdf_generator import generate_custom_pdf_from_detail
+        import asyncio
+        account = await account_service.get_account(db, account_nit)
+        branding = None
+        logo_b64 = None
+        if account:
+            branding = {
+                "color_primario": account.color_primario or "",
+                "color_secundario": account.color_secundario or "",
+                "telefono": account.telefono or "",
+                "email": account.email or "",
+                "web": account.web or "",
+            }
+            logo_b64 = account.logo_b64 or None
+
+        client = await dte_service.session_manager.get_client(db, account_nit)
+        detail = await asyncio.to_thread(client.detalle_dte, uuid, account_nit, nit_receptor)
+
+        pdf_bytes = generate_custom_pdf_from_detail(
+            detail, nit_emisor=account_nit, branding=branding, logo_b64=logo_b64,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={uuid}_custom.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(502, f"PDF generation error: {e}")
+
+
+@router.get("/dte/{uuid}/pos-receipt")
+async def download_pos_receipt(
+    uuid: str,
+    account_nit: str,
+    nit_receptor: str = "CF",
+    width: int = Q(default=80, description="Receipt width in mm (58 or 80)"),
+    key: ApiKey = require_role(Role.VIEWER),
+    db: AsyncSession = Depends(get_db),
+):
+    check_account_access(key, account_nit)
+    try:
+        from backend.services.pdf_generator import generate_pos_receipt_from_detail
+        import asyncio
+        client = await dte_service.session_manager.get_client(db, account_nit)
+        detail = await asyncio.to_thread(client.detalle_dte, uuid, account_nit, nit_receptor)
+
+        pdf_bytes = generate_pos_receipt_from_detail(
+            detail, nit_emisor=account_nit, width_mm=width,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={uuid}_receipt.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(502, f"POS receipt error: {e}")

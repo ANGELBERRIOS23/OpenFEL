@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Key, Users, FileText, Search, Activity,
-  ScrollText, LogOut, Sun, Moon, Book, Menu, X,
+  ScrollText, LogOut, Sun, Moon, Book, Menu, X, Terminal,
 } from 'lucide-react';
 import { clearKey } from '../lib/api';
 import { getTheme, toggleTheme } from '../lib/theme';
@@ -16,6 +16,7 @@ const links = [
   { to: '/health', icon: Activity, label: 'Health' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/docs', icon: Book, label: 'Docs' },
+  { to: '/playground', icon: Terminal, label: 'Playground' },
 ];
 
 export default function Layout() {

@@ -67,6 +67,7 @@ async def update_account(
     affiliation: Optional[str] = None,
     name: Optional[str] = None,
     status: Optional[str] = None,
+    branding: Optional[dict] = None,
 ) -> Account | None:
     account = await get_account(db, nit)
     if not account:
@@ -84,6 +85,10 @@ async def update_account(
         account.name = name
     if status is not None:
         account.status = status
+    if branding is not None:
+        for field in ("color_primario", "color_secundario", "telefono", "email", "web", "logo_b64"):
+            if field in branding:
+                setattr(account, field, branding[field] or "")
 
     account.updated_at = datetime.utcnow()
     await db.commit()

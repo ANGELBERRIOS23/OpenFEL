@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, Trash2, Pencil, X, Search, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Search, Loader2, Upload, Palette } from 'lucide-react';
 import { useTheme } from '../lib/useThemeClasses';
 import PasswordInput from '../components/PasswordInput';
 
@@ -16,7 +16,8 @@ export default function Accounts() {
   const [showForm, setShowForm] = useState(false);
   const [editNit, setEditNit] = useState<string | null>(null);
   const [form, setForm] = useState({ nit: '', login_password: '', cert_password: '', preferred_api: 'mixed', affiliation: 'GEN', name: '' });
-  const [editForm, setEditForm] = useState({ login_password: '', cert_password: '', preferred_api: '', affiliation: '', name: '' });
+  const [editForm, setEditForm] = useState({ login_password: '', cert_password: '', preferred_api: '', affiliation: '', name: '', branding: { color_primario: '', color_secundario: '', telefono: '', email: '', web: '', logo_b64: '' } });
+  const [showBranding, setShowBranding] = useState(false);
   const [error, setError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [nitHint, setNitHint] = useState('');
@@ -65,7 +66,12 @@ export default function Accounts() {
 
   function startEdit(a: any) {
     setEditNit(a.nit);
-    setEditForm({ login_password: '', cert_password: '', preferred_api: a.preferred_api, affiliation: a.affiliation, name: a.name || '' });
+    const b = a.branding || {};
+    setEditForm({
+      login_password: '', cert_password: '', preferred_api: a.preferred_api, affiliation: a.affiliation, name: a.name || '',
+      branding: { color_primario: b.color_primario || '', color_secundario: b.color_secundario || '', telefono: b.telefono || '', email: b.email || '', web: b.web || '', logo_b64: b.logo_b64 || '' },
+    });
+    setShowBranding(!!(b.color_primario || b.logo_b64));
   }
 
   async function saveEdit(e: React.FormEvent) {
@@ -79,6 +85,9 @@ export default function Accounts() {
       data.preferred_api = editForm.preferred_api;
       data.affiliation = editForm.affiliation;
       data.name = editForm.name;
+      if (showBranding) {
+        data.branding = editForm.branding;
+      }
       await api.accounts.update(editNit, data);
       setEditNit(null);
       load();
@@ -152,6 +161,66 @@ export default function Accounts() {
               <option value="PEQ">PEQ</option>
             </select>
           </div>
+          <div className="pt-2">
+            <button type="button" onClick={() => setShowBranding(!showBranding)} className={`flex items-center gap-2 text-xs cursor-pointer ${t.textMuted} hover:text-accent`}>
+              <Palette size={14} /> {showBranding ? 'Ocultar branding' : 'Personalizar factura (logo, colores)'}
+            </button>
+          </div>
+          {showBranding && (
+            <div className={`rounded-lg border p-4 space-y-3 ${t.isDark ? 'border-slate-600 bg-slate-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <h4 className={`text-sm font-semibold ${t.textH}`}>Branding de Factura</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Color primario</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={editForm.branding.color_primario || '#2C3E50'} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, color_primario: e.target.value}})} className="w-8 h-8 rounded cursor-pointer border-0" />
+                    <input value={editForm.branding.color_primario} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, color_primario: e.target.value}})} placeholder="#2C3E50" className={`flex-1 px-2 py-1.5 border rounded-lg text-xs font-mono ${t.input}`} />
+                  </div>
+                </div>
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Color secundario</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={editForm.branding.color_secundario || '#34495E'} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, color_secundario: e.target.value}})} className="w-8 h-8 rounded cursor-pointer border-0" />
+                    <input value={editForm.branding.color_secundario} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, color_secundario: e.target.value}})} placeholder="#34495E" className={`flex-1 px-2 py-1.5 border rounded-lg text-xs font-mono ${t.input}`} />
+                  </div>
+                </div>
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Teléfono</label>
+                  <input value={editForm.branding.telefono} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, telefono: e.target.value}})} placeholder="+502 3014 9000" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${t.input}`} />
+                </div>
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Email</label>
+                  <input value={editForm.branding.email} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, email: e.target.value}})} placeholder="contacto@empresa.com" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${t.input}`} />
+                </div>
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Sitio web</label>
+                  <input value={editForm.branding.web} onChange={e => setEditForm({...editForm, branding: {...editForm.branding, web: e.target.value}})} placeholder="empresa.com" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${t.input}`} />
+                </div>
+                <div>
+                  <label className={`${t.textXs} text-xs block mb-1`}>Logo (PNG/JPG)</label>
+                  <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-xs ${t.btnSecondary}`}>
+                    <Upload size={12} /> {editForm.branding.logo_b64 ? 'Logo cargado' : 'Subir logo'}
+                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const b64 = (reader.result as string).split(',')[1];
+                        setEditForm(prev => ({...prev, branding: {...prev.branding, logo_b64: b64}}));
+                      };
+                      reader.readAsDataURL(file);
+                    }} />
+                  </label>
+                </div>
+              </div>
+              {editForm.branding.logo_b64 && (
+                <div className="flex items-center gap-3">
+                  <img src={`data:image/png;base64,${editForm.branding.logo_b64}`} className="h-10 rounded" alt="Logo preview" />
+                  <button type="button" onClick={() => setEditForm({...editForm, branding: {...editForm.branding, logo_b64: ''}})} className="text-xs text-red-400 cursor-pointer">Quitar logo</button>
+                </div>
+              )}
+            </div>
+          )}
           {error && editNit && <p className="text-red-400 text-sm">{error}</p>}
           <button type="submit" className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm cursor-pointer">Guardar</button>
         </form>
