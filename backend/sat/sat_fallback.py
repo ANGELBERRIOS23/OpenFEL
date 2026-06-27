@@ -30,6 +30,98 @@ from .sat_movil_api import SatMovilAPI, SatMovilAPIError
 logger = logging.getLogger(__name__)
 
 
+def _build_item_taxes(regime: str, amount: float, cantidad: float = 1) -> list:
+    """
+    Build mobile-API-format impuestos list for a given tax regime.
+
+    Supports ALL SAT catalog taxes (catalogoUnidadesGravables-0.1.4):
+    - MontoGravable-based: IVA, TURISMO HOSPEDAJE, TIMBRE DE PRENSA, BOMBEROS
+    - CantidadUnidadesGravables-based: PETROLEO, TURISMO PASAJES, BEBIDAS, TABACO, CEMENTO, TARIFA PORTUARIA
+
+    For quantity-based taxes, pass sub_code in regime name:
+      "PETROLEO_4" = Diésel (Q1.30/gal), "PETROLEO_1" = Gasolina superior (Q4.70/gal)
+    """
+    regime = regime.upper()
+    if regime in ("EXENTO", "NO_AFECTO", "EXPORT"):
+        return [{"nombreCorto": "IVA", "codigoUnidadGravable": "2",
+                 "montoGravable": round(amount, 2), "montoImpuesto": 0.0}]
+    if regime == "PEQ":
+        return []
+    if regime == "TURISMO_HOSPEDAJE":
+        base = round(amount / 1.12, 2)
+        return [
+            {"nombreCorto": "IVA", "codigoUnidadGravable": "1",
+             "montoGravable": base, "montoImpuesto": round(amount - base, 2)},
+            {"nombreCorto": "TURISMO HOSPEDAJE", "codigoUnidadGravable": "1",
+             "montoGravable": base, "montoImpuesto": round(base * 0.10, 2)},
+        ]
+
+    # Special taxes are ADDITIONAL to IVA — items get both IVA 12% + the special tax
+    base_iva = round(amount / 1.12, 2)
+    iva_entry = {"nombreCorto": "IVA", "codigoUnidadGravable": "1",
+                 "montoGravable": base_iva, "montoImpuesto": round(amount - base_iva, 2)}
+
+    # Quantity-based taxes (factor × cantidad): REGIME or REGIME_subcode
+    _QTY_TAXES = {
+        "PETROLEO":              ("PETROLEO", "4", 1.3),
+        "PETROLEO_1":            ("PETROLEO", "1", 4.7),
+        "PETROLEO_2":            ("PETROLEO", "2", 4.6),
+        "PETROLEO_3":            ("PETROLEO", "3", 4.7),
+        "PETROLEO_4":            ("PETROLEO", "4", 1.3),
+        "PETROLEO_5":            ("PETROLEO", "5", 1.3),
+        "PETROLEO_6":            ("PETROLEO", "6", 0.5),
+        "PETROLEO_7":            ("PETROLEO", "7", 0.5),
+        "PETROLEO_9":            ("PETROLEO", "9", 0.5),
+        "PETROLEO_10":           ("PETROLEO", "10", 0.5),
+        "TURISMO_PASAJES":       ("TURISMO PASAJES", "1", 30.0),
+        "TURISMO_PASAJES_1":     ("TURISMO PASAJES", "1", 30.0),
+        "TURISMO_PASAJES_2":     ("TURISMO PASAJES", "2", 10.0),
+        "TURISMO_PASAJES_3":     ("TURISMO PASAJES", "3", 0.0),
+        "BEBIDAS_ALCOHOLICAS":   ("BEBIDAS ALCOHOLICAS", "1", 0.06),
+        "BEBIDAS_ALCOHOLICAS_1": ("BEBIDAS ALCOHOLICAS", "1", 0.06),
+        "BEBIDAS_ALCOHOLICAS_2": ("BEBIDAS ALCOHOLICAS", "2", 0.075),
+        "BEBIDAS_ALCOHOLICAS_6": ("BEBIDAS ALCOHOLICAS", "6", 0.085),
+        "TABACO":                ("TABACO", "1", 1.0),
+        "TABACO_1":              ("TABACO", "1", 1.0),
+        "TABACO_2":              ("TABACO", "2", 0.75),
+        "CEMENTO":               ("CEMENTO", "1", 1.5),
+        "BEBIDAS_NO_ALCOHOLICAS":   ("BEBIDAS NO ALCOHOLICAS", "1", 0.18),
+        "BEBIDAS_NO_ALCOHOLICAS_1": ("BEBIDAS NO ALCOHOLICAS", "1", 0.18),
+        "BEBIDAS_NO_ALCOHOLICAS_2": ("BEBIDAS NO ALCOHOLICAS", "2", 0.12),
+        "BEBIDAS_NO_ALCOHOLICAS_3": ("BEBIDAS NO ALCOHOLICAS", "3", 0.10),
+        "BEBIDAS_NO_ALCOHOLICAS_5": ("BEBIDAS NO ALCOHOLICAS", "5", 0.08),
+        "TARIFA_PORTUARIA":      ("TARIFA PORTUARIA", "1", 0.05),
+    }
+    if regime in _QTY_TAXES:
+        nombre, code, factor = _QTY_TAXES[regime]
+        special = {"nombreCorto": nombre, "codigoUnidadGravable": code,
+                   "cantidadUnidadesGravables": cantidad,
+                   "montoImpuesto": round(cantidad * factor, 2)}
+        return [iva_entry, special]
+
+    # Amount-based special taxes (factor × monto)
+    _AMT_TAXES = {
+        "TIMBRE_PRENSA": ("TIMBRE DE PRENSA", "1", 0.005),
+        "BOMBEROS":      ("BOMBEROS", "1", 0.02),
+    }
+    if regime in _AMT_TAXES:
+        nombre, code, factor = _AMT_TAXES[regime]
+        special = {"nombreCorto": nombre, "codigoUnidadGravable": code,
+                   "montoGravable": round(amount, 2),
+                   "montoImpuesto": round(amount * factor, 2)}
+        return [iva_entry, special]
+
+    # GENERAL — return None so mobile API auto-calculates IVA 12%
+    return None
+
+
+_REGIME_EXTRA_FRASE = {
+    "TURISMO_HOSPEDAJE": ("4", "6"),
+    "EXPORT": ("4", "1"),
+    "TURISMO_PASAJES": ("4", "14"),
+}
+
+
 class SatFallbackClient:
     """
     Unified SAT FEL client with automatic failover between Mobile and Web APIs.
@@ -112,6 +204,52 @@ class SatFallbackClient:
             logger.warning(f"[fallback] Web API login failed: {e}")
             return {}
 
+    def _process_regimes(self, items: list, tipo_dte: str) -> tuple:
+        """
+        Pre-process items with `regimen` field into mobile API format.
+
+        Returns (processed_items, frases_or_none):
+          - processed_items: items with pre-built `impuestos` lists
+          - frases: list of frase dicts if any non-default regime, else None
+        """
+        has_custom_regime = any(item.get("regimen") for item in items)
+        if not has_custom_regime:
+            return items, None
+
+        processed = []
+        extra_frases = set()
+
+        for item in items:
+            regime = (item.get("regimen") or "GENERAL").upper()
+            cantidad = float(item.get("cantidad", 1))
+            precio = float(item.get("precio_unitario", 0))
+            descuento = float(item.get("descuento", 0))
+            amount = cantidad * precio - descuento
+
+            taxes = _build_item_taxes(regime, amount, cantidad)
+            new_item = {k: v for k, v in item.items() if k != "regimen"}
+            if taxes is not None:
+                new_item["impuestos"] = taxes
+            processed.append(new_item)
+
+            if regime in _REGIME_EXTRA_FRASE:
+                extra_frases.add(_REGIME_EXTRA_FRASE[regime])
+
+        frases = None
+        if extra_frases:
+            if self.afiliacion == "PEQ":
+                frases = [{"tipo": "3", "escenario": "1"}]
+            elif tipo_dte == "NABN":
+                frases = []
+            elif tipo_dte in ("NCRE", "NDEB"):
+                frases = [{"tipo": "1", "escenario": "1"}]
+            else:
+                frases = [{"tipo": "1", "escenario": "1"}]
+            for t, e in extra_frases:
+                frases.append({"tipo": t, "escenario": e})
+
+        return processed, frases
+
     def emitir(
         self,
         items: list,
@@ -131,6 +269,28 @@ class SatFallbackClient:
         if tipo_dte is None:
             tipo_dte = "FPEQ" if self.afiliacion == "PEQ" else "FACT"
 
+        # Translate per-item regimen into impuestos + frases for mobile API
+        items, regime_frases = self._process_regimes(items, tipo_dte)
+        if regime_frases is not None:
+            kwargs["frases"] = regime_frases
+
+        # Map generic complemento to specific mobile API parameters
+        complemento = kwargs.pop("complemento", None)
+        if complemento and isinstance(complemento, dict):
+            comp_type = complemento.get("tipo", "")
+            comp_data = complemento.get("data", complemento)
+            if comp_type in ("NCRE", "NDEB") or "numeroAutorizacionDocumentoOrigen" in str(complemento):
+                kwargs.setdefault("complemento_notas", comp_data)
+                kwargs.setdefault("es_nota", True)
+            elif comp_type == "EXPORTACION" or "incoterm" in str(complemento):
+                kwargs.setdefault("complemento_exportacion", comp_data)
+            elif comp_type == "FESP" or "retencionISR" in str(complemento):
+                kwargs.setdefault("complemento_factura_especial", comp_data)
+                kwargs.setdefault("es_factura_especial", True)
+            elif comp_type == "CAMBIARIA" or "abonos" in str(complemento):
+                kwargs.setdefault("complemento_cambiaria", comp_data.get("abonos", []) if isinstance(comp_data, dict) else comp_data)
+                kwargs.setdefault("cambiaria", True)
+
         # Try preferred API first (mixed = mobile first with web fallback)
         if self.prefer in ("mobile", "mixed") and self._movil_available:
             result = self._try_emitir_movil(
@@ -141,9 +301,12 @@ class SatFallbackClient:
             # Fallback to web
             self._stats["fallbacks_triggered"] += 1
             logger.warning("[fallback] Mobile emission failed, trying web API...")
-            return self._try_emitir_web(
+            web_result = self._try_emitir_web(
                 tipo_dte, nit_receptor, nombre_receptor, direccion_receptor, items, moneda, **kwargs
-            ) or {"error": "Both APIs failed", "mobile_error": self._movil_last_error, "web_error": self._web_last_error}
+            )
+            if web_result:
+                return web_result
+            return self._build_both_failed_error("emitir")
         else:
             # Web first, mobile fallback
             result = self._try_emitir_web(
@@ -153,9 +316,35 @@ class SatFallbackClient:
                 return result
             self._stats["fallbacks_triggered"] += 1
             logger.warning("[fallback] Web emission failed, trying mobile API...")
-            return self._try_emitir_movil(
+            movil_result = self._try_emitir_movil(
                 tipo_dte, nit_receptor, nombre_receptor, direccion_receptor, items, moneda, **kwargs
-            ) or {"error": "Both APIs failed", "mobile_error": self._movil_last_error, "web_error": self._web_last_error}
+            )
+            if movil_result:
+                return movil_result
+            return self._build_both_failed_error("emitir")
+
+    def _build_both_failed_error(self, operation: str) -> dict:
+        """Build a descriptive error dict when both APIs fail."""
+        mobile_err = self._movil_last_error or ""
+        web_err = self._web_last_error or ""
+        mobile_down = not self._movil_available
+        web_down = not self._web_available
+
+        if mobile_down and web_down:
+            status = "API móvil y web caídas"
+        elif mobile_down:
+            status = f"API móvil caída — web rechazó la solicitud: {web_err[:100]}"
+        elif web_down:
+            status = f"API web caída — móvil rechazó la solicitud: {mobile_err[:100]}"
+        else:
+            status = f"Ambas APIs rechazaron la solicitud"
+
+        return {
+            "error": status,
+            "mobile_status": "caída" if mobile_down else ("error: " + mobile_err[:150] if mobile_err else "sin respuesta"),
+            "web_status": "caída" if web_down else ("error: " + web_err[:150] if web_err else "sin respuesta"),
+            "operation": operation,
+        }
 
     def _try_emitir_movil(self, tipo_dte, nit_receptor, nombre_receptor, direccion_receptor, items, moneda, **kwargs):
         try:
@@ -199,24 +388,104 @@ class SatFallbackClient:
                 return None
 
             t0 = time.time()
-            # Build items in web API format
-            web_items = []
-            for item in items:
-                web_items.append({
-                    "descripcion": item["descripcion"],
-                    "cantidad": item.get("cantidad", 1),
-                    "precio_unitario": item.get("precio_unitario", item.get("precio", 0)),
-                    "descuento": item.get("descuento", 0),
-                    "tipo": item.get("tipo_bien", "S"),
+
+            regimes_used = set()
+            web_items_nodes = []
+            for idx, item in enumerate(items, 1):
+                regime = (item.get("regimen") or "GENERAL").upper()
+                regimes_used.add(regime)
+                cantidad = float(item.get("cantidad", 1))
+                precio = float(item.get("precio_unitario", item.get("precio", 0)))
+                descuento = float(item.get("descuento", 0))
+                subtotal = cantidad * precio
+                total = subtotal - descuento
+                taxes = self._web.build_tax_node(total, regime=regime)
+                web_items_nodes.append({
+                    "NumeroLinea": idx,
+                    "BienOServicio": item.get("tipo_bien", "S"),
+                    "Cantidad": cantidad,
+                    "UnidadMedida": item.get("unidad_medida", "UND"),
+                    "Descripcion": item["descripcion"],
+                    "PrecioUnitario": round(precio, 2),
+                    "Precio": round(subtotal, 2),
+                    "Descuento": round(descuento, 2),
+                    "Total": round(total, 2),
+                    "Impuestos": taxes,
                 })
-            result = self._web.certificar_dte(
-                tipo_dte=tipo_dte,
-                nit_receptor=nit_receptor,
-                nombre_receptor=nombre_receptor,
-                items=web_items,
-            )
+
+            frase_keys = []
+            if self.afiliacion == "PEQ":
+                frase_keys.append("PEQ")
+            else:
+                frase_keys.append("GENERAL")
+            if "EXPORT" in regimes_used:
+                frase_keys.extend(["EXPORT_GEN", "EXPORT"])
+            if "TURISMO_HOSPEDAJE" in regimes_used:
+                frase_keys.append("TURISMO_HOSPEDAJE")
+            frases_node = self._web.build_frase_node(frase_keys)
+
+            totals_node = self._web.generate_totals(web_items_nodes)
+
+            datos_generales = {
+                "Tipo": tipo_dte, "FechaHoraEmision": "",
+                "FechaHoraEmisionForm": "ISO", "CodigoMoneda": moneda,
+            }
+            if kwargs.get("exportacion"):
+                datos_generales["Exp"] = "SI"
+
+            datos_emision = {
+                "DatosGenerales": datos_generales,
+                "Emisor": {
+                    "NITEmisor": self.nit,
+                    "NombreEmisor": self._movil._nombre_emisor or self.nit,
+                    "CodigoEstablecimiento": "1",
+                    "NombreComercial": self._movil._nombre_emisor or self.nit,
+                    "AfiliacionIVA": self.afiliacion,
+                    "DireccionEmisor": {
+                        "Direccion": "CIUDAD", "CodigoPostal": 1,
+                        "municipio": "GUATEMALA", "departamento": "GUATEMALA", "pais": "GT",
+                    },
+                },
+                "Receptor": {
+                    "IDReceptor": nit_receptor,
+                    "NombreReceptor": nombre_receptor,
+                    "DireccionReceptor": {"Direccion": direccion_receptor or "ciudad"},
+                },
+                "Frases": frases_node,
+                "Items": {"Item": web_items_nodes},
+                "Totales": totals_node,
+            }
+
+            dte_doc = {
+                "SAT": {
+                    "DTE": {
+                        "DatosEmision": datos_emision,
+                        "Certificacion": {
+                            "NITCertificador": self._web.nit_certificador,
+                            "NombreCertificador": "Superintendencia de Administracion Tributaria",
+                            "NumeroAutorizacion": {"Serie": "", "Numero": "", "text": ""},
+                            "FechaHoraCertificacion": "",
+                        },
+                    }
+                },
+                "Signature": {
+                    "SignedInfo": {"CanonicalizationMethod": {}, "SignatureMethod": {},
+                                  "Reference": {"DigestMethod": {}, "DigestValue": {}}},
+                    "SignatureValue": "",
+                },
+                "nombreNavegador": "Chrome 133.0.0.0",
+            }
+
+            result = self._web.certificar_dte(dte_doc, self.password_certificacion)
             elapsed = time.time() - t0
-            uuid = result.get("uuid", "")
+
+            if isinstance(result, dict) and result.get("detalle"):
+                detalle = result["detalle"]
+                if isinstance(detalle, list) and detalle:
+                    d = detalle[0]
+                    uuid = d.get("numeroAutorizacion", "")
+                    return {"uuid": uuid, "source": "web", "time_s": round(elapsed, 2), "raw": result}
+            uuid = result.get("uuid", "") if isinstance(result, dict) else ""
             return {"uuid": uuid, "source": "web", "time_s": round(elapsed, 2), "raw": result}
         except Exception as e:
             self._stats["web_failures"] += 1
@@ -258,7 +527,7 @@ class SatFallbackClient:
             self._stats["web_failures"] += 1
             self._web_last_error = str(e)
 
-        return {"success": False, "error": "Both APIs failed"}
+        return {"success": False, **self._build_both_failed_error("anular")}
 
     def listar_emitidos(self) -> list:
         """List issued DTEs (mobile API only — fast and sufficient)."""

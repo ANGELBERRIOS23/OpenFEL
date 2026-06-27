@@ -284,7 +284,7 @@ class SatMovilAPI:
             lista_impuestos = []
             if nodo_impuestos and item.get("impuestos"):
                 lista_impuestos = item["impuestos"]
-                item_impuestos = sum(i.get("monto", 0) for i in lista_impuestos)
+                item_impuestos = sum(i.get("montoImpuesto", i.get("monto", 0)) for i in lista_impuestos)
             elif nodo_impuestos:
                 # Auto-calculate IVA 12%
                 item_impuestos = round(item_total * 12 / 112, 2)

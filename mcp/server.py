@@ -70,7 +70,7 @@ async def list_tools():
             },
             "required": ["account_nit", "nit"],
         }),
-        Tool(name="openfel_emit", description="Emit a DTE (invoice)", inputSchema={
+        Tool(name="openfel_emit", description="Emit a DTE. Each item supports regimen: GENERAL, EXENTO, EXPORT, PEQ, NO_AFECTO, TURISMO_HOSPEDAJE, PETROLEO, TURISMO_PASAJES, TIMBRE_PRENSA, BOMBEROS, BEBIDAS_ALCOHOLICAS, TABACO, CEMENTO, BEBIDAS_NO_ALCOHOLICAS, TARIFA_PORTUARIA. Append _N for sub-codes (e.g. PETROLEO_4 for diesel).", inputSchema={
             "type": "object",
             "properties": {
                 "account_nit": {"type": "string"},
@@ -78,7 +78,8 @@ async def list_tools():
                 "receptor_nit": {"type": "string", "default": "CF"},
                 "receptor_nombre": {"type": "string", "default": "Consumidor Final"},
                 "items": {"type": "array", "items": {"type": "object", "properties": {
-                    "descripcion": {"type": "string"}, "cantidad": {"type": "integer"}, "precio_unitario": {"type": "number"},
+                    "descripcion": {"type": "string"}, "cantidad": {"type": "number"}, "precio_unitario": {"type": "number"},
+                    "regimen": {"type": "string", "description": "Tax regime for this item"},
                 }}},
             },
             "required": ["account_nit", "items"],
@@ -89,6 +90,7 @@ async def list_tools():
                 "account_nit": {"type": "string"},
                 "uuid": {"type": "string"},
                 "motivo": {"type": "string", "default": "Anulación"},
+                "nit_receptor": {"type": "string", "default": "CF", "description": "Must match original receptor NIT"},
             },
             "required": ["account_nit", "uuid"],
         }),
@@ -115,6 +117,40 @@ async def list_tools():
             },
             "required": ["nit", "login_password", "cert_password"],
         }),
+        Tool(name="openfel_update_branding", description="Update account branding (colors, logo, contact info) for custom PDF generation", inputSchema={
+            "type": "object",
+            "properties": {
+                "nit": {"type": "string", "description": "Account NIT to update"},
+                "color_primario": {"type": "string", "description": "Primary hex color, e.g. #1a5276"},
+                "color_secundario": {"type": "string", "description": "Secondary hex color, e.g. #2e86c1"},
+                "telefono": {"type": "string"},
+                "email": {"type": "string"},
+                "web": {"type": "string"},
+                "logo_b64": {"type": "string", "description": "PNG logo as base64 string (null to remove)"},
+            },
+            "required": ["nit"],
+        }),
+        Tool(name="openfel_custom_pdf", description="Download a branded PDF for a DTE (with logo, colors, QR)", inputSchema={
+            "type": "object",
+            "properties": {
+                "account_nit": {"type": "string"},
+                "uuid": {"type": "string"},
+                "nit_receptor": {"type": "string", "default": "CF"},
+                "output_path": {"type": "string", "description": "Local path to save the PDF"},
+            },
+            "required": ["account_nit", "uuid", "output_path"],
+        }),
+        Tool(name="openfel_pos_receipt", description="Download a POS thermal receipt PDF for a DTE", inputSchema={
+            "type": "object",
+            "properties": {
+                "account_nit": {"type": "string"},
+                "uuid": {"type": "string"},
+                "nit_receptor": {"type": "string", "default": "CF"},
+                "width": {"type": "integer", "enum": [58, 80], "default": 80, "description": "Receipt width in mm"},
+                "output_path": {"type": "string", "description": "Local path to save the PDF"},
+            },
+            "required": ["account_nit", "uuid", "output_path"],
+        }),
     ]
 
 
@@ -139,6 +175,34 @@ async def call_tool(name: str, arguments: dict):
             result = _call("GET", "/keys")
         elif name == "openfel_create_account":
             result = _call("POST", "/accounts", arguments)
+        elif name == "openfel_update_branding":
+            nit = arguments.pop("nit")
+            branding = {k: v for k, v in arguments.items() if v is not None}
+            result = _call("PATCH", f"/accounts/{nit}", {"branding": branding})
+        elif name == "openfel_custom_pdf":
+            output_path = arguments.get("output_path", "/tmp/custom.pdf")
+            url = f"{BASE_URL}/api/dte/{arguments['uuid']}/custom-pdf"
+            params = {"account_nit": arguments["account_nit"], "nit_receptor": arguments.get("nit_receptor", "CF")}
+            with httpx.Client(timeout=60) as client:
+                r = client.get(url, headers=_headers(), params=params)
+            if r.status_code == 200 and len(r.content) > 0:
+                with open(output_path, "wb") as f:
+                    f.write(r.content)
+                result = json.dumps({"saved": output_path, "size_bytes": len(r.content)})
+            else:
+                result = f"Error {r.status_code}: {r.text[:200]}"
+        elif name == "openfel_pos_receipt":
+            output_path = arguments.get("output_path", "/tmp/receipt.pdf")
+            url = f"{BASE_URL}/api/dte/{arguments['uuid']}/pos-receipt"
+            params = {"account_nit": arguments["account_nit"], "nit_receptor": arguments.get("nit_receptor", "CF"), "width": arguments.get("width", 80)}
+            with httpx.Client(timeout=60) as client:
+                r = client.get(url, headers=_headers(), params=params)
+            if r.status_code == 200 and len(r.content) > 0:
+                with open(output_path, "wb") as f:
+                    f.write(r.content)
+                result = json.dumps({"saved": output_path, "size_bytes": len(r.content)})
+            else:
+                result = f"Error {r.status_code}: {r.text[:200]}"
         else:
             result = f"Unknown tool: {name}"
     except Exception as e:
