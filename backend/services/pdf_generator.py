@@ -12,6 +12,22 @@ import xml.etree.ElementTree as ET
 import qrcode
 from fpdf import FPDF
 
+_UNICODE_REPLACE = {
+    '—': '-', '–': '-', '‘': "'", '’': "'",
+    '“': '"', '”': '"', '…': '...', ' ': ' ',
+    '•': '*', '‐': '-', '‑': '-', '‒': '-',
+    '﻿': '',
+}
+
+
+def _sanitize(text):
+    if not text:
+        return text or ''
+    for char, repl in _UNICODE_REPLACE.items():
+        text = text.replace(char, repl)
+    return text
+
+
 _C_DARK_DEFAULT = (44, 62, 80)
 _C_MID_DEFAULT = (52, 73, 94)
 _C_LIGHT_DEFAULT = (236, 240, 241)
@@ -174,20 +190,20 @@ def parse_xml_string(xml_str: str) -> dict:
 
     emisor = {
         'nit': em.get('NITEmisor'),
-        'nombre': em.get('NombreEmisor'),
-        'nombre_comercial': em.get('NombreComercial', ''),
+        'nombre': _sanitize(em.get('NombreEmisor')),
+        'nombre_comercial': _sanitize(em.get('NombreComercial', '')),
         'afiliacion': em.get('AfiliacionIVA'),
-        'direccion': dir_em.find('dte:Direccion', NS).text or '' if dir_em is not None else '',
-        'municipio': dir_em.find('dte:Municipio', NS).text or '' if dir_em is not None else '',
-        'departamento': dir_em.find('dte:Departamento', NS).text or '' if dir_em is not None else '',
+        'direccion': _sanitize(dir_em.find('dte:Direccion', NS).text or '' if dir_em is not None else ''),
+        'municipio': _sanitize(dir_em.find('dte:Municipio', NS).text or '' if dir_em is not None else ''),
+        'departamento': _sanitize(dir_em.find('dte:Departamento', NS).text or '' if dir_em is not None else ''),
     }
 
     receptor = {
         'nit': rec.get('IDReceptor'),
-        'nombre': rec.get('NombreReceptor'),
+        'nombre': _sanitize(rec.get('NombreReceptor')),
         'correo': rec.get('CorreoReceptor', ''),
         'telefono': rec.get('TelefonoReceptor', ''),
-        'direccion': dir_rec.find('dte:Direccion', NS).text if dir_rec is not None else '',
+        'direccion': _sanitize(dir_rec.find('dte:Direccion', NS).text if dir_rec is not None else ''),
     }
 
     frases = []
@@ -207,7 +223,7 @@ def parse_xml_string(xml_str: str) -> dict:
             'linea': el.get('NumeroLinea'),
             'bs': el.get('BienOServicio'),
             'cantidad': float(el.find('dte:Cantidad', NS).text),
-            'descripcion': el.find('dte:Descripcion', NS).text,
+            'descripcion': _sanitize(el.find('dte:Descripcion', NS).text),
             'precio_unit': float(el.find('dte:PrecioUnitario', NS).text),
             'descuento': float(el.find('dte:Descuento', NS).text),
             'total': float(el.find('dte:Total', NS).text),
@@ -250,7 +266,7 @@ def parse_detail_dict(d: dict, nit_emisor: str = "") -> dict:
             'linea': str(item.get('orden', item.get('linea', 1))),
             'bs': item.get('bienOServicio', 'S'),
             'cantidad': float(item.get('cantidad', 1)),
-            'descripcion': item.get('descripcion', ''),
+            'descripcion': _sanitize(item.get('descripcion', '')),
             'precio_unit': float(item.get('precioUnitario', item.get('precio', 0))),
             'descuento': float(item.get('descuento', 0)),
             'total': float(item.get('total', item.get('subtotal', 0))),
@@ -268,19 +284,19 @@ def parse_detail_dict(d: dict, nit_emisor: str = "") -> dict:
         'moneda': d.get('codigoMoneda', 'GTQ'),
         'emisor': {
             'nit': d.get('nitEmisor', nit_emisor),
-            'nombre': d.get('nombreEmisor', ''),
-            'nombre_comercial': d.get('nombreComercialEmisor', d.get('nombreEmisor', '')),
+            'nombre': _sanitize(d.get('nombreEmisor', '')),
+            'nombre_comercial': _sanitize(d.get('nombreComercialEmisor', d.get('nombreEmisor', ''))),
             'afiliacion': d.get('afiliacionIVA', 'GEN'),
-            'direccion': d.get('direccionEmisor', ''),
-            'municipio': d.get('municipioEmisor', 'Guatemala'),
-            'departamento': d.get('departamentoEmisor', 'Guatemala'),
+            'direccion': _sanitize(d.get('direccionEmisor', '')),
+            'municipio': _sanitize(d.get('municipioEmisor', 'Guatemala')),
+            'departamento': _sanitize(d.get('departamentoEmisor', 'Guatemala')),
         },
         'receptor': {
             'nit': d.get('nitReceptor', d.get('NITReceptor', 'CF')),
-            'nombre': d.get('nombreReceptor', d.get('NombreReceptor', 'CF')),
+            'nombre': _sanitize(d.get('nombreReceptor', d.get('NombreReceptor', 'CF'))),
             'correo': d.get('correoReceptor', ''),
             'telefono': d.get('telefonoReceptor', ''),
-            'direccion': d.get('direccionReceptor', 'ciudad'),
+            'direccion': _sanitize(d.get('direccionReceptor', 'ciudad')),
         },
         'frases': d.get('frases', []),
         'items': items,
@@ -696,7 +712,7 @@ class ReciboPOS(FPDF):
 
     def _estimate_height(self, d):
         n_items = len(d.get('items', []))
-        return max(120, 90 + n_items * 4 + 45)
+        return 105 + n_items * 4
 
     def build(self):
         self.add_page()
