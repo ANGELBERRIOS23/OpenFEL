@@ -1,0 +1,10 @@
+.git
+.env
+data/
+__pycache__/
+*.pyc
+node_modules/
+dashboard/dist/
+.DS_Store
+.vite/
+*.md

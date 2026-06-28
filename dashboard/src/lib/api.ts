@@ -54,6 +54,16 @@ export const api = {
     get: (nit: string) => request<any>(`/accounts/${nit}`),
     update: (nit: string, data: any) => request<any>(`/accounts/${nit}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deactivate: (nit: string) => request<void>(`/accounts/${nit}`, { method: 'DELETE' }),
+    previewPdf: async (nit: string, branding?: any) => {
+      const res = await fetch(`${BASE}/accounts/${nit}/preview-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': getKey() },
+        body: JSON.stringify(branding ? { branding } : {}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
   },
 
   nit: {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, Trash2, Pencil, X, Search, Loader2, Upload, Palette } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Search, Loader2, Upload, Palette, Eye } from 'lucide-react';
 import { useTheme } from '../lib/useThemeClasses';
 import PasswordInput from '../components/PasswordInput';
 
@@ -21,6 +21,8 @@ export default function Accounts() {
   const [error, setError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [nitHint, setNitHint] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const load = () => api.accounts.list().then(setAccounts).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -219,6 +221,21 @@ export default function Accounts() {
                   <button type="button" onClick={() => setEditForm({...editForm, branding: {...editForm.branding, logo_b64: ''}})} className="text-xs text-red-400 cursor-pointer">Quitar logo</button>
                 </div>
               )}
+              <button type="button" disabled={previewing} onClick={async () => {
+                if (!editNit) return;
+                setPreviewing(true);
+                try {
+                  const url = await api.accounts.previewPdf(editNit, editForm.branding);
+                  setPreviewUrl(url);
+                } catch (err: any) {
+                  setError(`Preview: ${err.message}`);
+                } finally {
+                  setPreviewing(false);
+                }
+              }} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-xs ${t.btnSecondary} disabled:opacity-50`}>
+                {previewing ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
+                Vista previa de factura
+              </button>
             </div>
           )}
           {error && editNit && <p className="text-red-400 text-sm">{error}</p>}
@@ -280,6 +297,18 @@ export default function Accounts() {
           {accounts.length === 0 && <p className={`p-4 text-center ${t.textXs}`}>Sin cuentas registradas</p>}
         </div>
       </div>
+
+      {previewUrl && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}>
+          <div className={`relative w-full max-w-3xl h-[85vh] rounded-xl overflow-hidden ${t.card}`} onClick={e => e.stopPropagation()}>
+            <div className={`flex items-center justify-between px-4 py-2 border-b ${t.border}`}>
+              <span className={`text-sm font-semibold ${t.textH}`}>Vista previa de factura</span>
+              <button onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }} className={`${t.textMuted} hover:text-red-400 cursor-pointer`}><X size={18} /></button>
+            </div>
+            <iframe src={previewUrl} className="w-full h-full" title="Preview PDF" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

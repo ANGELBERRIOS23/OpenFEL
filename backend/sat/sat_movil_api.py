@@ -151,6 +151,34 @@ class SatMovilAPI:
                 status_code=401,
             )
 
+    def export_session(self) -> dict | None:
+        if not self.is_authenticated():
+            return None
+        return {
+            "token": self._token,
+            "token_expires": self._token_expires,
+            "nit": self._nit,
+            "nombre_emisor": self._nombre_emisor,
+            "afiliacion_iva": self._afiliacion_iva,
+            "establecimiento": self._establecimiento,
+            "direccion_establecimiento": self._direccion_establecimiento,
+        }
+
+    def import_session(self, data: dict) -> bool:
+        if not data or not data.get("token"):
+            return False
+        if time.time() >= data.get("token_expires", 0):
+            return False
+        self._token = data["token"]
+        self._token_expires = data["token_expires"]
+        self._nit = data.get("nit")
+        self._nombre_emisor = data.get("nombre_emisor", "")
+        self._afiliacion_iva = data.get("afiliacion_iva", "GEN")
+        self._establecimiento = data.get("establecimiento", "1")
+        self._direccion_establecimiento = data.get("direccion_establecimiento")
+        logger.info(f"Mobile session restored for NIT={self._nit}, expires in {int(self._token_expires - time.time())}s")
+        return True
+
     # -----------------------------------------------------------------------
     # Core Operations
     # -----------------------------------------------------------------------

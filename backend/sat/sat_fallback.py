@@ -204,6 +204,21 @@ class SatFallbackClient:
             logger.warning(f"[fallback] Web API login failed: {e}")
             return {}
 
+    def export_session(self) -> dict | None:
+        mob = self._movil.export_session() if self._movil_available else None
+        if not mob:
+            return None
+        return {"mobile": mob, "prefer": self.prefer}
+
+    def import_session(self, data: dict) -> bool:
+        if not data or "mobile" not in data:
+            return False
+        ok = self._movil.import_session(data["mobile"])
+        if ok:
+            self._movil_available = True
+            self.afiliacion = data["mobile"].get("afiliacion_iva", self.afiliacion)
+        return ok
+
     def _process_regimes(self, items: list, tipo_dte: str) -> tuple:
         """
         Pre-process items with `regimen` field into mobile API format.
