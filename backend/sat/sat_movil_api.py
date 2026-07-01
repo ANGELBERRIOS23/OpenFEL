@@ -68,6 +68,8 @@ class SatMovilAPI:
         self._nombre_emisor: Optional[str] = None
         self._establecimiento: Optional[str] = None
         self._direccion_establecimiento: Optional[dict] = None
+        self._establecimientos: list = []
+        self._tipo_personeria: str = "0"
         self._afiliacion_iva: Optional[str] = None
 
         # Reusable session for connection pooling
@@ -115,27 +117,52 @@ class SatMovilAPI:
         self._nit = nit
         self._nombre_emisor = resp.get("nombre", "")
         self._afiliacion_iva = resp.get("afiliacionIVA", "GEN")
+        self._tipo_personeria = str(resp.get("tipoPersoneria") or "0")
 
-        # Parse establishment info from login response
-        establecimientos = resp.get("establecimientos", [])
-        if establecimientos:
-            est = establecimientos[0]
-            self._establecimiento = str(est.get("numero", "1"))
-            self._direccion_establecimiento = {
-                "codigoEstablecimiento": str(est.get("numero", "1")),
-                "tipo": "",
-                "direccion": est.get("vistaPrevia", "Guatemala"),
-                "codigoPostal": "00000",
-                "municipio": est.get("municipio", "GUATEMALA"),
-                "departamento": est.get("departamento", "GUATEMALA"),
-                "pais": "GT",
-            }
+        # Guardar TODOS los establecimientos (para que el usuario pueda elegir).
+        # NO hay endpoint aparte: la lista completa viene en la respuesta del login.
+        self._establecimientos = resp.get("establecimientos", []) or []
+        if self._establecimientos:
+            est0 = self._establecimientos[0]
+            self._establecimiento = str(est0.get("numero", "1"))
+            self._direccion_establecimiento = self._dir_est_from(est0)
         else:
             self._establecimiento = "1"
             self._direccion_establecimiento = None
 
-        logger.info(f"Mobile API login OK: NIT={nit}, nombre={self._nombre_emisor}")
+        logger.info(f"Mobile API login OK: NIT={nit}, nombre={self._nombre_emisor}, "
+                    f"establecimientos={len(self._establecimientos)}")
         return resp
+
+    @staticmethod
+    def _dir_est_from(est: dict) -> dict:
+        """Construye direccionEstablecimiento desde un registro de establecimiento del login."""
+        num = str(est.get("numero", "1"))
+        return {
+            "codigoEstablecimiento": num,
+            "tipo": "",
+            "direccion": est.get("vistaPrevia", "Guatemala"),
+            "codigoPostal": "00000",
+            "municipio": est.get("municipio", "GUATEMALA"),
+            "departamento": est.get("departamento", "GUATEMALA"),
+            "pais": "GT",
+        }
+
+    def get_establecimientos(self) -> list:
+        """
+        Lista de establecimientos del emisor para que el usuario ELIJA (sin hardcodear).
+        Se obtiene del login (no hay endpoint dedicado). Cada item: numero, nombre,
+        direccion, estado. Pasar el 'numero' elegido como `establecimiento=` en emitir_factura.
+        """
+        return [
+            {
+                "numero": str(e.get("numero", "")),
+                "nombre": e.get("nombre", ""),
+                "direccion": e.get("vistaPrevia", ""),
+                "estado": e.get("estado", ""),
+            }
+            for e in self._establecimientos
+        ]
 
     def is_authenticated(self) -> bool:
         """Check if the current token is still valid (not expired)."""
@@ -312,15 +339,22 @@ class SatMovilAPI:
             lista_impuestos = []
             if nodo_impuestos and item.get("impuestos"):
                 lista_impuestos = item["impuestos"]
-                item_impuestos = sum(i.get("montoImpuesto", i.get("monto", 0)) for i in lista_impuestos)
+                item_impuestos = sum(float(i.get("montoImpuesto", i.get("monto", 0)) or 0) for i in lista_impuestos)
             elif nodo_impuestos:
-                # Auto-calculate IVA 12%
-                item_impuestos = round(item_total * 12 / 112, 2)
+                # Auto-calculate IVA 12% — estructura EXACTA de la app movil:
+                # strings de 6 decimales + todos los campos que exige el XSD.
+                monto_gravable = round(item_total / 1.12, 6)
+                item_impuestos = round(item_total - monto_gravable, 6)
                 lista_impuestos = [{
-                    "nombreCorto": "IVA",
                     "codigoUnidadGravable": "1",
-                    "montoGravable": round(item_total - item_impuestos, 2),
-                    "montoImpuesto": item_impuestos,
+                    "nombreUnidadGravable": "Tasa 12.00%",
+                    "nombreCorto": "IVA",
+                    "operaSobreCasilla": "MontoGravable",
+                    "factor": "0.12",
+                    "cantidadUnidadGravable": "null",
+                    "montoGravable": f"{monto_gravable:.6f}",
+                    "montoImpuesto": f"{item_impuestos:.6f}",
+                    "sumaTotal": "false",
                 }]
 
             total_impuestos += item_impuestos
@@ -360,24 +394,27 @@ class SatMovilAPI:
         except Exception:
             pass  # Use default
 
-        # Resolve establishment
-        est_code = establecimiento or self._establecimiento or "1"
-        dir_est = direccion_establecimiento or self._direccion_establecimiento or {
-            "codigoEstablecimiento": est_code,
-            "tipo": "",
-            "direccion": "Guatemala",
-            "codigoPostal": "00000",
-            "municipio": "GUATEMALA",
-            "departamento": "GUATEMALA",
-            "pais": "GT",
-        }
+        # Resolve establishment — el usuario puede pasar `establecimiento` = numero;
+        # la direccion y el nombre se auto-rellenan desde la lista del login (sin hardcodear).
+        est_code = str(establecimiento or self._establecimiento or "1")
+        _est_rec = next((e for e in self._establecimientos
+                         if str(e.get("numero")) == est_code), None)
+        _est_nombre = (_est_rec or {}).get("nombre") or self._nombre_emisor
+        dir_est = (direccion_establecimiento
+                   or (self._dir_est_from(_est_rec) if _est_rec else None)
+                   or self._direccion_establecimiento
+                   or {
+                       "codigoEstablecimiento": est_code, "tipo": "",
+                       "direccion": "Guatemala", "codigoPostal": "00000",
+                       "municipio": "GUATEMALA", "departamento": "GUATEMALA", "pais": "GT",
+                   })
 
         # Build the full emission payload
         payload = {
             "frasePaso": frase_paso,
             "nitEmisor": self._nit,
             "nombreEmisor": self._nombre_emisor,
-            "tipoPersoneria": "0",
+            "tipoPersoneria": getattr(self, "_tipo_personeria", "0") or "0",
             "tipoDte": tipo_dte,
             "nitReceptor": nit_receptor,
             "destinoVenta": None,
@@ -386,12 +423,12 @@ class SatMovilAPI:
             "direccionReceptor": direccion_receptor,
             "fecha": datetime.now().strftime("%d/%m/%Y"),
             "codigoEstablecimiento": est_code,
-            "establecimiento": f"{est_code} - {self._nombre_emisor}",
+            "establecimiento": f"{est_code} - {_est_nombre}",
             "moneda": moneda,
             "afiliacionIVA": afiliacion,
             "tasaCambio": tasa_cambio,
             "tasaDolar": tasa_cambio,
-            "impuestos": round(total_impuestos, 2),
+            "impuestos": round(total_impuestos, 6),
             "total": round(total_monto, 2),
             "descuentos": round(total_descuentos, 2),
             "exportacion": exportacion,
@@ -444,7 +481,8 @@ class SatMovilAPI:
                 "totalMenosRetenciones": 0.0,
             },
             "detalle": detalle,
-            "resumenImpuesto": [],
+            "resumenImpuesto": ([{"nombreCorto": "IVA", "total": f"{total_impuestos:.6f}"}]
+                                if nodo_impuestos and total_impuestos else []),
             "frases": frases,
             "direccionEstablecimiento": dir_est,
         }
