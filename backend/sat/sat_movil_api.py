@@ -189,6 +189,8 @@ class SatMovilAPI:
             "afiliacion_iva": self._afiliacion_iva,
             "establecimiento": self._establecimiento,
             "direccion_establecimiento": self._direccion_establecimiento,
+            "establecimientos": self._establecimientos,
+            "tipo_personeria": self._tipo_personeria,
         }
 
     def import_session(self, data: dict) -> bool:
@@ -203,6 +205,8 @@ class SatMovilAPI:
         self._afiliacion_iva = data.get("afiliacion_iva", "GEN")
         self._establecimiento = data.get("establecimiento", "1")
         self._direccion_establecimiento = data.get("direccion_establecimiento")
+        self._establecimientos = data.get("establecimientos", []) or []
+        self._tipo_personeria = str(data.get("tipo_personeria") or "0")
         logger.info(f"Mobile session restored for NIT={self._nit}, expires in {int(self._token_expires - time.time())}s")
         return True
 

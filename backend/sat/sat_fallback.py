@@ -219,6 +219,15 @@ class SatFallbackClient:
             self.afiliacion = data["mobile"].get("afiliacion_iva", self.afiliacion)
         return ok
 
+    def get_establecimientos(self) -> list:
+        """Establecimientos del emisor para elegir (detecta desde la API movil; sin hardcodear)."""
+        if self._movil_available:
+            try:
+                return self._movil.get_establecimientos()
+            except Exception:
+                pass
+        return []
+
     def _process_regimes(self, items: list, tipo_dte: str) -> tuple:
         """
         Pre-process items with `regimen` field into mobile API format.
